@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: kosko-auth
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: BOT_TOKEN
+        value: 8578668373:AAFxAxJplTY6YE6ej-BUuImhmIrs8-_2AT8
+      - key: BOT_USERNAME
+        value: kosko_auth_bot
+    healthCheckPath: /health

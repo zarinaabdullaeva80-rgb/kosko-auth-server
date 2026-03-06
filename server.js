@@ -1,0 +1,159 @@
+// KOSKO Telegram Auth Server — Cloud Deployment Version
+// Deploy to Render.com, Railway.app, or any Node.js host
+
+const express = require('express');
+const cors = require('cors');
+const crypto = require('crypto');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// ═══════════════════════════════════════════════════
+const BOT_TOKEN = process.env.BOT_TOKEN || '8578668373:AAFxAxJplTY6YE6ej-BUuImhmIrs8-_2AT8';
+const BOT_USERNAME = process.env.BOT_USERNAME || 'kosko_auth_bot';
+const PORT = process.env.PORT || 3001;
+// ═══════════════════════════════════════════════════
+
+// Storage (in-memory, for production use Redis)
+const authCodes = new Map();
+const pendingLogins = new Map();
+
+// ─── 1. Generate Telegram auth deeplink ──────────────
+app.post('/api/auth/telegram/start', (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Phone required' });
+
+    const sessionId = crypto.randomBytes(16).toString('hex');
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+
+    authCodes.set(phone, { code, expires: Date.now() + 300000, sessionId });
+    pendingLogins.set(sessionId, { phone, verified: false });
+
+    const deeplink = `https://t.me/${BOT_USERNAME}?start=auth_${sessionId}_${code}`;
+    res.json({ sessionId, deeplink, botUsername: BOT_USERNAME });
+});
+
+// ─── 2. Check auth status ────────────────────────────
+app.get('/api/auth/telegram/status/:sessionId', (req, res) => {
+    const session = pendingLogins.get(req.params.sessionId);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    if (session.verified) {
+        const token = crypto.randomBytes(32).toString('hex');
+        pendingLogins.delete(req.params.sessionId);
+        return res.json({ verified: true, token, phone: session.phone });
+    }
+    res.json({ verified: false });
+});
+
+// ─── 3. OTP via Telegram ─────────────────────────────
+app.post('/api/auth/otp/telegram', (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Phone required' });
+
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    authCodes.set(phone, { code, expires: Date.now() + 300000 });
+    console.log(`📱 OTP for ${phone}: ${code}`);
+    res.json({ sent: true, message: 'Code sent via Telegram' });
+});
+
+// ─── 4. Verify OTP ───────────────────────────────────
+app.post('/api/auth/otp/verify', (req, res) => {
+    const { phone, code } = req.body;
+    const stored = authCodes.get(phone);
+
+    if (!stored) return res.status(400).json({ error: 'Code not found' });
+    if (Date.now() > stored.expires) return res.status(400).json({ error: 'Code expired' });
+    if (stored.code !== code) return res.status(400).json({ error: 'Wrong code' });
+
+    authCodes.delete(phone);
+    const token = crypto.randomBytes(32).toString('hex');
+    res.json({ verified: true, token });
+});
+
+// ─── 5. Mock verify (for testing without Telegram) ───
+app.post('/api/auth/mock/verify', (req, res) => {
+    const { phone, code } = req.body;
+    if (code === '1234') {
+        const token = crypto.randomBytes(32).toString('hex');
+        return res.json({ verified: true, token, phone });
+    }
+    res.status(400).json({ error: 'Wrong code' });
+});
+
+// ─── Telegram API Helper ─────────────────────────────
+async function sendTelegramMessage(chatId, text) {
+    try {
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+        });
+    } catch (err) {
+        console.error('Telegram send error:', err.message);
+    }
+}
+
+// ─── Telegram Long Polling ───────────────────────────
+let lastUpdateId = 0;
+
+async function pollTelegram() {
+    try {
+        const res = await fetch(
+            `https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}&timeout=10`
+        );
+        const data = await res.json();
+
+        if (data.ok && data.result.length > 0) {
+            for (const update of data.result) {
+                lastUpdateId = update.update_id;
+                if (update.message) handleTelegramMessage(update.message);
+            }
+        }
+    } catch (err) {
+        console.error('Polling error:', err.message);
+    }
+    setTimeout(pollTelegram, 1000);
+}
+
+function handleTelegramMessage(message) {
+    const chatId = message.chat.id;
+    const text = message.text || '';
+    const userName = message.from?.first_name || 'User';
+
+    console.log(`📩 Telegram: ${userName} → "${text}"`);
+
+    if (text.startsWith('/start auth_')) {
+        const parts = text.replace('/start auth_', '').split('_');
+        const sessionId = parts[0];
+        const session = pendingLogins.get(sessionId);
+
+        if (session) {
+            session.verified = true;
+            session.telegramChatId = chatId;
+            sendTelegramMessage(chatId,
+                `✅ ${userName}, вы авторизованы в KOSKO!\n📱 ${session.phone}\nВернитесь в приложение.`
+            );
+            console.log(`✅ Auth confirmed for ${session.phone}`);
+        } else {
+            sendTelegramMessage(chatId, '❌ Сессия истекла. Попробуйте заново.');
+        }
+    } else if (text === '/start') {
+        sendTelegramMessage(chatId,
+            `👋 Привет, ${userName}! Я бот KOSKO.\n\n1️⃣ Откройте KOSKO\n2️⃣ «Войти через Telegram»\n3️⃣ Подтвердите здесь`
+        );
+    }
+}
+
+// ─── Health check ────────────────────────────────────
+app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
+app.get('/', (req, res) => res.json({ service: 'KOSKO Auth', status: 'running' }));
+
+// ─── Start ───────────────────────────────────────────
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 KOSKO Auth Server on port ${PORT}`);
+    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook`)
+        .then(() => { console.log('🤖 Bot polling started'); pollTelegram(); })
+        .catch(() => pollTelegram());
+});
