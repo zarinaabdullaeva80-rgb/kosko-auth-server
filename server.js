@@ -194,9 +194,80 @@ app.post('/api/chat/admin/reply', (req, res) => {
     console.log(`💬 Admin reply: ${msg.text}`);
     res.json({ ok: true, message: msg });
 });
+// ─── LOYALTY CARD API ────────────────────────────────
+const loyaltyCards = new Map();
+const LEVELS = [
+    { name: 'bronze', min: 0, cashback: 3 },
+    { name: 'silver', min: 1000, cashback: 5 },
+    { name: 'gold', min: 5000, cashback: 7 },
+    { name: 'platinum', min: 15000, cashback: 10 },
+];
+
+function calcLevel(balance) {
+    return [...LEVELS].reverse().find(l => balance >= l.min) || LEVELS[0];
+}
+
+// Register new loyalty card
+app.post('/api/loyalty/register', (req, res) => {
+    const { phone, name } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Phone required' });
+    const barcode = '222' + phone.replace(/\D/g, '').slice(-9).padStart(9, '0');
+    // Add check digit
+    const digits = barcode.split('').map(Number);
+    let sum = 0;
+    for (let i = 0; i < 12; i++) sum += digits[i] * (i % 2 === 0 ? 1 : 3);
+    const fullBarcode = barcode + ((10 - (sum % 10)) % 10);
+
+    const card = {
+        barcode: fullBarcode,
+        ownerName: name || 'Пользователь KOSKO',
+        phone,
+        balance: 0,
+        level: 'bronze',
+        cashbackPercent: 3,
+        transactions: [],
+        createdAt: new Date().toISOString(),
+    };
+    loyaltyCards.set(fullBarcode, card);
+    loyaltyCards.set(phone, card); // also index by phone
+    console.log(`💳 New loyalty card: ${fullBarcode} for ${phone}`);
+    res.json({ ok: true, card });
+});
+
+// Get card by barcode or phone
+app.get('/api/loyalty/card/:id', (req, res) => {
+    const card = loyaltyCards.get(req.params.id);
+    if (!card) return res.status(404).json({ error: 'Card not found' });
+    const level = calcLevel(card.balance);
+    card.level = level.name;
+    card.cashbackPercent = level.cashback;
+    res.json({ card });
+});
+
+// Add bonus points
+app.post('/api/loyalty/bonus', (req, res) => {
+    const { barcode, amount, description } = req.body;
+    const card = loyaltyCards.get(barcode);
+    if (!card) return res.status(404).json({ error: 'Card not found' });
+    card.balance += amount;
+    const level = calcLevel(card.balance);
+    card.level = level.name;
+    card.cashbackPercent = level.cashback;
+    card.transactions.unshift({
+        id: Date.now().toString(),
+        date: new Date().toLocaleDateString('ru-RU'),
+        type: amount > 0 ? 'accrual' : 'writeoff',
+        amount: Math.abs(amount),
+        description: description || (amount > 0 ? 'Начисление баллов' : 'Списание баллов'),
+        bonusChange: amount,
+    });
+    console.log(`💰 Card ${barcode}: ${amount > 0 ? '+' : ''}${amount} points → ${card.balance} total`);
+    res.json({ ok: true, card });
+});
 
 // ─── SERVER REGISTRATION (for 1C discovery) ─────────
 let registeredServer = null;
+
 
 // 1C server registers itself with cloud
 app.post('/api/server/register', (req, res) => {
