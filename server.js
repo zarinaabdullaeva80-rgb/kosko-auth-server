@@ -146,9 +146,53 @@ function handleTelegramMessage(message) {
     }
 }
 
+// ─── CHAT API ────────────────────────────────────────
+const chatMessages = [];
+
+// Send message from mobile app
+app.post('/api/chat/send', (req, res) => {
+    const { text, from, phone } = req.body;
+    if (!text) return res.status(400).json({ error: 'Text required' });
+    const msg = {
+        id: Date.now().toString(),
+        text,
+        from: from || 'user',
+        phone: phone || '+998 XX',
+        time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+        timestamp: Date.now(),
+    };
+    chatMessages.push(msg);
+    console.log(`💬 Chat [${msg.from}]: ${msg.text}`);
+    res.json({ ok: true, message: msg });
+});
+
+// Get messages (with optional ?since=timestamp for long-polling)
+app.get('/api/chat/messages', (req, res) => {
+    const since = parseInt(req.query.since) || 0;
+    const msgs = since ? chatMessages.filter(m => m.timestamp > since) : chatMessages;
+    res.json({ messages: msgs, total: chatMessages.length });
+});
+
+// Admin reply
+app.post('/api/chat/admin/reply', (req, res) => {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: 'Text required' });
+    const msg = {
+        id: Date.now().toString(),
+        text,
+        from: 'support',
+        phone: 'admin',
+        time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+        timestamp: Date.now(),
+    };
+    chatMessages.push(msg);
+    console.log(`💬 Admin reply: ${msg.text}`);
+    res.json({ ok: true, message: msg });
+});
+
 // ─── Health check ────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
-app.get('/', (req, res) => res.json({ service: 'KOSKO Auth', status: 'running' }));
+app.get('/', (req, res) => res.json({ service: 'KOSKO Auth + Chat', status: 'running' }));
 
 // ─── Start ───────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
