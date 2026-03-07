@@ -10,9 +10,69 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve admin panel at /admin
+// ─── ADMIN AUTH ──────────────────────────────────────
+const ADMIN_USER = process.env.ADMIN_USER || 'admin';
+const ADMIN_PASS = process.env.ADMIN_PASS || 'kosko2026';
+const adminTokens = new Map();
+
+// Admin login page
+app.get('/admin/login', (req, res) => {
+    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KOSKO Admin Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;background:#08080f;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh}
+.login-box{background:#13131f;border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:48px;width:380px;text-align:center}
+.logo{font-size:28px;font-weight:900;color:#6c63ff;letter-spacing:4px;margin-bottom:8px}
+.subtitle{color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:32px}
+input{width:100%;background:#1e1e32;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px 16px;color:#fff;font-size:15px;margin-bottom:12px;outline:none}
+input:focus{border-color:#6c63ff}
+button{width:100%;background:#6c63ff;border:none;border-radius:10px;padding:14px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-top:8px}
+button:hover{background:#5b54e0}
+.error{color:#ff6b6b;font-size:13px;margin-top:12px;display:none}
+</style></head><body>
+<div class="login-box">
+<div class="logo">KOSKO</div>
+<div class="subtitle">Вход в панель управления</div>
+<form onsubmit="return doLogin(event)">
+<input type="text" id="user" placeholder="Логин" autocomplete="username" value="admin">
+<input type="password" id="pass" placeholder="Пароль" autocomplete="current-password">
+<button type="submit">Войти</button>
+</form>
+<div class="error" id="err">Неверный логин или пароль</div>
+</div>
+<script>
+async function doLogin(e){e.preventDefault();
+const user=document.getElementById('user').value;
+const pass=document.getElementById('pass').value;
+const res=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})});
+const data=await res.json();
+if(data.token){localStorage.setItem('adminToken',data.token);window.location.href='/admin?token='+data.token}
+else{document.getElementById('err').style.display='block'}}
+</script></body></html>`);
+});
+
+// Admin login API
+app.post('/api/admin/login', (req, res) => {
+    const { username, password } = req.body;
+    if (username === ADMIN_USER && password === ADMIN_PASS) {
+        const token = crypto.randomBytes(32).toString('hex');
+        adminTokens.set(token, { created: Date.now() });
+        console.log('🔐 Admin logged in');
+        return res.json({ ok: true, token });
+    }
+    res.status(401).json({ error: 'Wrong credentials' });
+});
+
+// Serve admin panel (protected)
+app.get('/admin', (req, res) => {
+    const token = req.query.token || req.headers['x-admin-token'];
+    const session = adminTokens.get(token);
+    if (!session || Date.now() - session.created > 86400000) {
+        return res.redirect('/admin/login');
+    }
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 app.use('/admin', express.static(path.join(__dirname, 'public')));
-app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
 // ═══════════════════════════════════════════════════
 const BOT_TOKEN = process.env.BOT_TOKEN || '8578668373:AAFxAxJplTY6YE6ej-BUuImhmIrs8-_2AT8';
@@ -289,9 +349,99 @@ app.get('/api/server/registered', (req, res) => {
     res.json(registeredServer);
 });
 
+// ─── SMS OTP (Eskiz.uz) ─────────────────────────────
+const ESKIZ_TOKEN = process.env.ESKIZ_TOKEN || '';
+const smsCodes = new Map();
+
+app.post('/api/auth/sms/send', async (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Phone required' });
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const sessionId = crypto.randomBytes(16).toString('hex');
+    smsCodes.set(phone, { code, sessionId, expires: Date.now() + 300000 });
+
+    // If Eskiz.uz token is set, send real SMS
+    if (ESKIZ_TOKEN) {
+        try {
+            await fetch('https://notify.eskiz.uz/api/message/sms/send', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${ESKIZ_TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mobile_phone: phone.replace(/\D/g, ''), message: `KOSKO: Ваш код: ${code}`, from: '4546' }),
+            });
+        } catch (err) { console.log('Eskiz error:', err.message); }
+    }
+
+    console.log(`📱 SMS OTP for ${phone}: ${code}`);
+    res.json({ success: true, sessionId });
+});
+
+app.post('/api/auth/sms/verify', (req, res) => {
+    const { phone, code } = req.body;
+    const stored = smsCodes.get(phone);
+    if (!stored) return res.status(400).json({ error: 'Code not found' });
+    if (Date.now() > stored.expires) return res.status(400).json({ error: 'Code expired' });
+    if (stored.code !== code) return res.status(400).json({ error: 'Wrong code' });
+    smsCodes.delete(phone);
+    const token = crypto.randomBytes(32).toString('hex');
+    res.json({ verified: true, token });
+});
+
+// ─── PAYMENT (Click/Payme stubs) ─────────────────────
+const payments = new Map();
+
+app.post('/api/payment/click/create', (req, res) => {
+    const { amount, transaction_param } = req.body;
+    const id = 'click_' + Date.now();
+    payments.set(id, { status: 'pending', amount, orderId: transaction_param, provider: 'click' });
+    // In production: redirect to Click API
+    res.json({ transactionId: id, paymentUrl: `https://my.click.uz/services/pay?amount=${amount}` });
+});
+
+app.post('/api/payment/payme/create', (req, res) => {
+    const { orderId, amount } = req.body;
+    const id = 'payme_' + Date.now();
+    payments.set(id, { status: 'pending', amount, orderId, provider: 'payme' });
+    res.json({ transactionId: id });
+});
+
+app.get('/api/payment/:provider/status/:id', (req, res) => {
+    const payment = payments.get(req.params.id);
+    if (!payment) return res.status(404).json({ paid: false, status: 'not_found' });
+    res.json({ paid: payment.status === 'paid', status: payment.status });
+});
+
+// ─── PUSH NOTIFICATIONS ─────────────────────────────
+const pushTokens = [];
+
+app.post('/api/push/register', (req, res) => {
+    const { token, platform } = req.body;
+    if (!token) return res.status(400).json({ error: 'Token required' });
+    if (!pushTokens.find(t => t.token === token)) {
+        pushTokens.push({ token, platform, registered: Date.now() });
+        console.log(`📲 Push token registered: ${token.slice(0, 20)}...`);
+    }
+    res.json({ ok: true, total: pushTokens.length });
+});
+
+app.post('/api/push/send', async (req, res) => {
+    const { title, body } = req.body;
+    // Send via Expo Push API
+    const messages = pushTokens.map(t => ({ to: t.token, title, body, sound: 'default' }));
+    try {
+        await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(messages),
+        });
+        res.json({ ok: true, sent: messages.length });
+    } catch (err) {
+        res.json({ ok: false, error: err.message });
+    }
+});
+
 // ─── Health check ────────────────────────────────────
-app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime(), chatMessages: chatMessages.length, registeredServer: !!registeredServer }));
-app.get('/', (req, res) => res.json({ service: 'KOSKO Auth + Chat + Discovery', status: 'running' }));
+app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime(), chatMessages: chatMessages.length, loyaltyCards: loyaltyCards.size, pushTokens: pushTokens.length }));
+app.get('/', (req, res) => res.json({ service: 'KOSKO Full Platform', version: '2.0', status: 'running' }));
 
 // ─── Start ───────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
