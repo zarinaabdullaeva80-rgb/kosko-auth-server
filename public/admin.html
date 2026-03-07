@@ -1,0 +1,2607 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOSKO Admin Panel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        :root {
+            --bg: #08080f;
+            --sidebar: #0e0e1c;
+            --card: #13131f;
+            --card2: #1a1a2e;
+            --border: rgba(255, 255, 255, 0.07);
+            --purple: #6c63ff;
+            --violet: #a78bfa;
+            --red: #ff6b6b;
+            --green: #4ade80;
+            --text: rgba(255, 255, 255, 0.85);
+            --muted: rgba(255, 255, 255, 0.4);
+            --input: #1e1e32;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+            overflow: hidden
+        }
+
+        /* ── SIDEBAR ─────────────────────────────────── */
+        .sidebar {
+            width: 220px;
+            background: var(--sidebar);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0
+        }
+
+        .sidebar-logo {
+            padding: 24px 20px 16px;
+            font-size: 24px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #a78bfa, #6c63ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -1px
+        }
+
+        .sidebar-sub {
+            padding: 0 20px 20px;
+            font-size: 11px;
+            color: var(--muted);
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border)
+        }
+
+        .nav {
+            flex: 1;
+            padding: 12px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--muted);
+            transition: all .2s
+        }
+
+        .nav-item:hover {
+            background: rgba(108, 99, 255, 0.1);
+            color: var(--text)
+        }
+
+        .nav-item.active {
+            background: rgba(108, 99, 255, 0.18);
+            color: #a78bfa
+        }
+
+        .nav-item .ni {
+            font-size: 16px;
+            width: 20px;
+            text-align: center
+        }
+
+        .sidebar-bottom {
+            padding: 16px;
+            border-top: 1px solid var(--border)
+        }
+
+        .admin-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px
+        }
+
+        .admin-ava {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #6c63ff, #a78bfa);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 13px;
+            flex-shrink: 0
+        }
+
+        .admin-name {
+            font-size: 12px;
+            font-weight: 600
+        }
+
+        .admin-role {
+            font-size: 10px;
+            color: var(--muted)
+        }
+
+        /* ── MAIN ─────────────────────────────────────── */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden
+        }
+
+        .topbar {
+            height: 60px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            gap: 16px;
+            flex-shrink: 0
+        }
+
+        .topbar h1 {
+            font-size: 18px;
+            font-weight: 700;
+            flex: 1
+        }
+
+        .topbar-time {
+            font-size: 12px;
+            color: var(--muted)
+        }
+
+        .sync-btn {
+            background: linear-gradient(135deg, #6c63ff, #a78bfa);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit
+        }
+
+        .sync-btn:hover {
+            opacity: .85
+        }
+
+        .content-area {
+            display: flex;
+            flex: 1;
+            overflow: hidden
+        }
+
+        .section {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            display: none
+        }
+
+        .section.active {
+            display: block
+        }
+
+        /* ── CARDS / STATS ─────────────────────────────── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+            margin-bottom: 24px
+        }
+
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 18px;
+            position: relative;
+            overflow: hidden
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 60px;
+            height: 60px;
+            border-radius: 0 16px 0 60px;
+            opacity: .15
+        }
+
+        .stat-card.c1::before {
+            background: #6c63ff
+        }
+
+        .stat-card.c2::before {
+            background: #ff6b6b
+        }
+
+        .stat-card.c3::before {
+            background: #4ade80
+        }
+
+        .stat-card.c4::before {
+            background: #f59e0b
+        }
+
+        .stat-icon {
+            font-size: 22px;
+            margin-bottom: 10px
+        }
+
+        .stat-val {
+            font-size: 26px;
+            font-weight: 800;
+            margin-bottom: 2px
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--muted);
+            font-weight: 500
+        }
+
+        .stat-delta {
+            font-size: 11px;
+            color: var(--green);
+            margin-top: 6px
+        }
+
+        /* ── TABLE ─────────────────────────────────────── */
+        .card-box {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 20px
+        }
+
+        .card-box-header {
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border)
+        }
+
+        .card-box-title {
+            font-size: 14px;
+            font-weight: 700
+        }
+
+        .btn {
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            border-radius: 10px;
+            transition: all .2s
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6c63ff, #a78bfa);
+            color: white;
+            padding: 8px 16px;
+            font-size: 12px
+        }
+
+        .btn-primary:hover {
+            opacity: .85
+        }
+
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 11px
+        }
+
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            padding: 8px 14px;
+            font-size: 12px;
+            border: 1px solid var(--border)
+        }
+
+        .btn-ghost:hover {
+            background: rgba(255, 255, 255, 0.1)
+        }
+
+        .btn-danger {
+            background: rgba(255, 107, 107, 0.15);
+            color: #ff6b6b;
+            padding: 5px 10px;
+            font-size: 11px;
+            border: 1px solid rgba(255, 107, 107, 0.2)
+        }
+
+        .btn-danger:hover {
+            background: rgba(255, 107, 107, 0.25)
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse
+        }
+
+        th {
+            padding: 10px 16px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--muted);
+            text-align: left;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            background: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--border)
+        }
+
+        td {
+            padding: 12px 16px;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border)
+        }
+
+        tr:last-child td {
+            border-bottom: none
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02)
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600
+        }
+
+        .badge-active {
+            background: rgba(74, 222, 128, 0.15);
+            color: #4ade80
+        }
+
+        .badge-inactive {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--muted)
+        }
+
+        .badge-bronze {
+            background: rgba(180, 120, 60, 0.2);
+            color: #cd7f32
+        }
+
+        .badge-silver {
+            background: rgba(192, 192, 192, 0.15);
+            color: #c0c0c0
+        }
+
+        .badge-gold {
+            background: rgba(255, 215, 0, 0.15);
+            color: #ffd700
+        }
+
+        .badge-pending {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24
+        }
+
+        /* ── FORM ───────────────────────────────────────── */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px
+        }
+
+        .form-grid.full {
+            grid-template-columns: 1fr
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px
+        }
+
+        .form-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--muted)
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            background: var(--input);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 13px;
+            color: var(--text);
+            font-family: inherit;
+            outline: none;
+            transition: border-color .2s
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            border-color: rgba(108, 99, 255, 0.5)
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px
+        }
+
+        .form-group select option {
+            background: #1a1a2e
+        }
+
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 6px
+        }
+
+        .level-cashback-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 14px
+        }
+
+        .level-card {
+            background: var(--card2);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px
+        }
+
+        .level-card-title {
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px
+        }
+
+        /* ── LOG ─────────────────────────────────────────── */
+        .log-list {
+            max-height: 260px;
+            overflow-y: auto
+        }
+
+        .log-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px
+        }
+
+        .log-item:last-child {
+            border-bottom: none
+        }
+
+        .log-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-top: 3px
+        }
+
+        .log-dot.info {
+            background: #6c63ff
+        }
+
+        .log-dot.success {
+            background: #4ade80
+        }
+
+        .log-dot.warn {
+            background: #fbbf24
+        }
+
+        .log-dot.push {
+            background: #a78bfa
+        }
+
+        .log-text {
+            flex: 1;
+            color: var(--text)
+        }
+
+        .log-time {
+            color: var(--muted);
+            flex-shrink: 0
+        }
+
+        /* ── MODAL ─────────────────────────────────────── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            backdrop-filter: blur(4px)
+        }
+
+        .modal-overlay.open {
+            display: flex
+        }
+
+        .modal {
+            background: var(--card2);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 24px;
+            width: 480px;
+            max-width: 95vw
+        }
+
+        .modal-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between
+        }
+
+        .modal-close {
+            background: rgba(255, 255, 255, 0.08);
+            border: none;
+            color: var(--text);
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.14)
+        }
+
+        /* ── PREVIEW PANEL ─────────────────────────────── */
+        .preview-panel {
+            width: 300px;
+            border-left: 1px solid var(--border);
+            background: var(--sidebar);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0
+        }
+
+        .preview-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px
+        }
+
+        .preview-body {
+            flex: 1;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 20px;
+            overflow-y: auto
+        }
+
+        .phone-mini {
+            width: 200px;
+            background: #1a1a2e;
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 0 0 5px #0d0d20, 0 0 0 7px #252540, 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 40px rgba(108, 99, 255, 0.15);
+            font-family: 'Inter', sans-serif
+        }
+
+        .pm-notch {
+            height: 18px;
+            background: #0d0d20;
+            border-radius: 0 0 12px 12px;
+            width: 60px;
+            margin: 0 auto
+        }
+
+        .pm-header {
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between
+        }
+
+        .pm-logo {
+            font-size: 13px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #a78bfa, #6c63ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text
+        }
+
+        .pm-ava {
+            width: 22px;
+            height: 22px;
+            border-radius: 7px;
+            background: linear-gradient(135deg, #6c63ff, #a78bfa);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 700;
+            color: white
+        }
+
+        .pm-banner {
+            margin: 6px 10px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #6c63ff 0%, #a78bfa 60%, #ff6b6b 100%);
+            padding: 10px;
+            min-height: 70px;
+            position: relative;
+            overflow: hidden
+        }
+
+        .pm-banner-badge {
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+            font-size: 7px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            width: fit-content;
+            margin-bottom: 4px
+        }
+
+        .pm-banner h4 {
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1.3
+        }
+
+        .pm-banner p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 8px;
+            margin-top: 2px
+        }
+
+        .pm-card-section {
+            padding: 6px 10px
+        }
+
+        .pm-section-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            margin-bottom: 5px
+        }
+
+        .pm-loyalty {
+            height: 60px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #1a0a2e 0%, #6c63ff 40%, #a78bfa 100%);
+            padding: 10px;
+            position: relative;
+            overflow: hidden
+        }
+
+        .pm-loyalty-logo {
+            color: white;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: -.5px
+        }
+
+        .pm-loyalty-level {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            padding: 2px 6px;
+            color: white;
+            font-size: 7px;
+            font-weight: 700
+        }
+
+        .pm-loyalty-pts {
+            position: absolute;
+            bottom: 8px;
+            left: 10px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 8px
+        }
+
+        .pm-cashback {
+            padding: 6px 10px 10px
+        }
+
+        .pm-cashback-row {
+            display: flex;
+            gap: 4px
+        }
+
+        .pm-cb-badge {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 7px;
+            padding: 4px 5px;
+            text-align: center
+        }
+
+        .pm-cb-badge .lvl {
+            font-size: 7px;
+            color: var(--muted);
+            margin-bottom: 1px
+        }
+
+        .pm-cb-badge .pct {
+            font-size: 9px;
+            font-weight: 700;
+            color: #a78bfa
+        }
+
+        .pm-nav {
+            height: 40px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 0 8px
+        }
+
+        .pm-nav-i {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            font-size: 12px
+        }
+
+        .pm-nav-i span:last-child {
+            font-size: 6px;
+            color: rgba(255, 255, 255, 0.4)
+        }
+
+        /* ── STATUS INDICATOR ───────────────────────────── */
+        .status-bar-top {
+            background: rgba(108, 99, 255, 0.1);
+            border: 1px solid rgba(108, 99, 255, 0.2);
+            border-radius: 10px;
+            padding: 8px 14px;
+            font-size: 12px;
+            color: #a78bfa;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ade80;
+            animation: pulse 2s ease infinite;
+            flex-shrink: 0
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1)
+            }
+
+            50% {
+                opacity: .5;
+                transform: scale(.8)
+            }
+        }
+
+        .section-heading {
+            font-size: 18px;
+            font-weight: 800;
+            margin-bottom: 4px
+        }
+
+        .section-desc {
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 20px
+        }
+
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 20px 0
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--muted);
+            font-size: 13px
+        }
+
+        .search-input {
+            background: var(--input);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 13px;
+            color: var(--text);
+            font-family: inherit;
+            outline: none;
+            width: 220px
+        }
+
+        .search-input:focus {
+            border-color: rgba(108, 99, 255, .5)
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #1a1a2e;
+            border: 1px solid rgba(108, 99, 255, .4);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 500;
+            z-index: 999;
+            transform: translateY(80px);
+            opacity: 0;
+            transition: all .3s;
+            pointer-events: none
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1
+        }
+
+        /* ── BROADCAST STATS ──────────────────────────────── */
+        .bcast-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 16px
+        }
+
+        .bcast-stat {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 14px;
+            text-align: center
+        }
+
+        .bcast-stat-icon {
+            font-size: 20px;
+            margin-bottom: 6px
+        }
+
+        .bcast-stat-val {
+            font-size: 22px;
+            font-weight: 800;
+            margin-bottom: 2px
+        }
+
+        .bcast-stat-label {
+            font-size: 10px;
+            color: var(--muted);
+            font-weight: 500
+        }
+
+        .bcast-stat-pct {
+            font-size: 11px;
+            color: var(--green);
+            margin-top: 4px
+        }
+
+        .schedule-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end
+        }
+
+        .schedule-row .form-group {
+            flex: 1
+        }
+
+        .schedule-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24
+        }
+
+        .schedule-badge.now {
+            background: rgba(74, 222, 128, 0.15);
+            color: #4ade80
+        }
+
+        /* ── ANALYTICS ──────────────────────────────────── */
+        .chart-container {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px
+        }
+
+        .chart-title {
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px
+        }
+
+        .chart-bar-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 6px;
+            height: 120px;
+            padding-top: 10px
+        }
+
+        .chart-bar-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px
+        }
+
+        .chart-bar {
+            width: 100%;
+            border-radius: 6px 6px 0 0;
+            background: linear-gradient(180deg, #6c63ff, #a78bfa);
+            min-height: 4px;
+            transition: height .5s
+        }
+
+        .chart-bar-label {
+            font-size: 9px;
+            color: var(--muted)
+        }
+
+        .chart-bar-val {
+            font-size: 9px;
+            color: var(--violet);
+            font-weight: 600
+        }
+
+        .analytics-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px
+        }
+
+        .metric-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px
+        }
+
+        .metric-title {
+            font-size: 11px;
+            color: var(--muted);
+            font-weight: 500;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: .5px
+        }
+
+        .metric-val {
+            font-size: 24px;
+            font-weight: 800;
+            margin-bottom: 2px
+        }
+
+        .metric-sub {
+            font-size: 11px;
+            color: var(--muted)
+        }
+
+        .metric-bar {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden
+        }
+
+        .metric-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            background: linear-gradient(90deg, #6c63ff, #a78bfa)
+        }
+
+        /* ── STORE SCHEDULE ─────────────────────────────── */
+        .store-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 18px;
+            margin-bottom: 14px
+        }
+
+        .store-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px
+        }
+
+        .store-name {
+            font-size: 14px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px
+        }
+
+        .store-address {
+            font-size: 11px;
+            color: var(--muted);
+            margin-bottom: 12px
+        }
+
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px
+        }
+
+        .day-col {
+            text-align: center
+        }
+
+        .day-label {
+            font-size: 9px;
+            color: var(--muted);
+            font-weight: 600;
+            margin-bottom: 4px
+        }
+
+        .day-time {
+            font-size: 10px;
+            color: var(--text);
+            font-weight: 500
+        }
+
+        /* ── PRODUCTS ────────────────────────────────── */
+        .price-tag {
+            color: #4ade80;
+            font-weight: 700
+        }
+
+        /* ── ORDERS ─────────────────────────────────── */
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 0;
+            border-bottom: 1px solid var(--border)
+        }
+
+        .toggle-row:last-child {
+            border-bottom: none
+        }
+
+        .toggle-label {
+            flex: 1
+        }
+
+        .toggle-label b {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 2px
+        }
+
+        .toggle-label span {
+            font-size: 11px;
+            color: var(--muted)
+        }
+
+        .toggle {
+            width: 44px;
+            height: 24px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.12);
+            position: relative;
+            cursor: pointer;
+            transition: background .3s;
+            flex-shrink: 0
+        }
+
+        .toggle.on {
+            background: #6c63ff
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: white;
+            transition: transform .3s
+        }
+
+        .toggle.on::after {
+            transform: translateX(20px)
+        }
+
+        /* ── CHAT ───────────────────────────────────── */
+        .chat-container {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            height: 420px;
+            display: flex;
+            flex-direction: column
+        }
+
+        .chat-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 12px 16px;
+            border-right: 1px solid var(--border);
+            width: 200px;
+            overflow-y: auto;
+            flex-shrink: 0
+        }
+
+        .chat-user {
+            padding: 8px 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--muted);
+            transition: all .2s
+        }
+
+        .chat-user:hover,
+        .chat-user.active {
+            background: rgba(108, 99, 255, 0.15);
+            color: var(--text)
+        }
+
+        .chat-user-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ade80;
+            flex-shrink: 0
+        }
+
+        .chat-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px
+        }
+
+        .chat-msg {
+            max-width: 75%;
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            line-height: 1.4
+        }
+
+        .chat-msg.user {
+            background: rgba(108, 99, 255, 0.15);
+            color: var(--text);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px
+        }
+
+        .chat-msg.admin {
+            background: linear-gradient(135deg, #6c63ff, #a78bfa);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px
+        }
+
+        .chat-input-row {
+            display: flex;
+            gap: 8px;
+            padding: 12px 16px;
+            border-top: 1px solid var(--border)
+        }
+
+        .chat-input {
+            flex: 1;
+            background: var(--input);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--text);
+            font-family: inherit;
+            outline: none
+        }
+
+        .chat-input:focus {
+            border-color: rgba(108, 99, 255, .5)
+        }
+
+        .chat-layout {
+            display: flex;
+            height: 100%
+        }
+
+        /* ── PROMO CODES ────────────────────────────── */
+        .code-tag {
+            font-family: monospace;
+            background: rgba(108, 99, 255, 0.15);
+            color: #a78bfa;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 1px
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-logo">KOSKO</div>
+        <div class="sidebar-sub">Admin Panel</div>
+        <nav class="nav">
+            <div class="nav-item active" onclick="goTo('dashboard',this)"><span class="ni">📊</span> Dashboard</div>
+            <div class="nav-item" onclick="goTo('promotions',this)"><span class="ni">📢</span> Акции</div>
+            <div class="nav-item" onclick="goTo('push',this)"><span class="ni">🔔</span> Уведомления</div>
+            <div class="nav-item" onclick="goTo('loyalty',this)"><span class="ni">💳</span> Бонусная программа</div>
+            <div class="nav-item" onclick="goTo('users',this)"><span class="ni">👥</span> Пользователи</div>
+            <div class="nav-item" onclick="goTo('export',this)"><span class="ni">📤</span> Экспорт данных</div>
+            <div class="nav-item" onclick="goTo('analytics',this)"><span class="ni">📈</span> Аналитика</div>
+            <div class="nav-item" onclick="goTo('schedule',this)"><span class="ni">🕒</span> Расписание</div>
+            <div class="nav-item" onclick="goTo('products',this)"><span class="ni">📦</span> Товары</div>
+            <div class="nav-item" onclick="goTo('orders',this)"><span class="ni">🚴</span> Заказы</div>
+            <div class="nav-item" onclick="goTo('referrals',this)"><span class="ni">🤝</span> Рефералы</div>
+            <div class="nav-item" onclick="goTo('codes',this)"><span class="ni">🎫</span> Промокоды</div>
+            <div class="nav-item" onclick="goTo('chat',this)"><span class="ni">💬</span> Чат</div>
+        </nav>
+        <div class="sidebar-bottom">
+            <div class="admin-badge">
+                <div class="admin-ava">A</div>
+                <div>
+                    <div class="admin-name">Администратор</div>
+                    <div class="admin-role">Super Admin</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div class="main">
+        <div class="topbar">
+            <h1 id="pageTitle">Dashboard</h1>
+            <span class="topbar-time" id="clock"></span>
+            <button class="sync-btn" onclick="syncToApp()">⚡ Синхронизировать с приложением</button>
+        </div>
+
+        <div class="content-area">
+
+            <!-- ═══ DASHBOARD ═══ -->
+            <section class="section active" id="sec-dashboard">
+                <div class="status-bar-top"><span class="pulse-dot"></span> Приложение онлайн · Последняя синхронизация:
+                    <span id="lastSync">только что</span>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card c1">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-val" id="stat-users">0</div>
+                        <div class="stat-label">Пользователей</div>
+                        <div class="stat-delta">+12 за неделю</div>
+                    </div>
+                    <div class="stat-card c2">
+                        <div class="stat-icon">💳</div>
+                        <div class="stat-val" id="stat-cards">0</div>
+                        <div class="stat-label">Активных карт</div>
+                        <div class="stat-delta">+5 за неделю</div>
+                    </div>
+                    <div class="stat-card c3">
+                        <div class="stat-icon">📢</div>
+                        <div class="stat-val" id="stat-promos">0</div>
+                        <div class="stat-label">Активных акций</div>
+                        <div class="stat-delta" id="stat-promos-delta"></div>
+                    </div>
+                    <div class="stat-card c4">
+                        <div class="stat-icon">💰</div>
+                        <div class="stat-val" id="stat-pts">0</div>
+                        <div class="stat-label">Выдано баллов</div>
+                        <div class="stat-delta">сегодня</div>
+                    </div>
+                </div>
+                <div class="card-box">
+                    <div class="card-box-header"><span class="card-box-title">📋 Лог активности</span></div>
+                    <div class="log-list" id="log-list"></div>
+                </div>
+            </section>
+
+            <!-- ═══ PROMOTIONS ═══ -->
+            <section class="section" id="sec-promotions">
+                <div class="section-heading">Управление акциями</div>
+                <div class="section-desc">Акции отображаются в баннере мобильного приложения KOSKO.</div>
+                <div class="card-box">
+                    <div class="card-box-header">
+                        <span class="card-box-title">Список акций</span>
+                        <button class="btn btn-primary btn-sm" onclick="openPromoModal()">+ Добавить акцию</button>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Описание</th>
+                                <th>До</th>
+                                <th>Статус</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="promo-table"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ═══ PUSH ═══ -->
+            <section class="section" id="sec-push">
+                <div class="section-heading">Push-уведомления</div>
+                <div class="section-desc">Отправка уведомлений всем пользователям или по уровню карты.</div>
+                <div class="card-box" style="padding:20px">
+                    <div class="form-grid full" style="gap:14px">
+                        <div class="form-group"><label>Заголовок уведомления</label><input id="push-title"
+                                placeholder="Например: Новая акция! 🎉"></div>
+                        <div class="form-group"><label>Текст сообщения</label><textarea id="push-body"
+                                placeholder="Текст, который увидит пользователь..."></textarea></div>
+                        <div class="form-group"><label>Аудитория</label>
+                            <select id="push-audience">
+                                <option value="all">Все пользователи</option>
+                                <option value="bronze">Bronze</option>
+                                <option value="silver">Silver</option>
+                                <option value="gold">Gold</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>⏰ Запланировать отправку</label>
+                            <div class="schedule-row">
+                                <div class="form-group"><label>Дата</label><input id="push-date" type="date"></div>
+                                <div class="form-group"><label>Время</label><input id="push-time" type="time"></div>
+                            </div>
+                            <div style="margin-top:6px;font-size:11px;color:var(--muted)">💡 Оставьте пустым для
+                                немедленной отправки</div>
+                        </div>
+                        <div class="form-actions"><button class="btn btn-ghost"
+                                onclick="clearPush()">Очистить</button><button class="btn btn-primary"
+                                onclick="sendPush()">🔔 Отправить</button></div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+                <div class="section-heading" style="font-size:16px">📊 Статистика рассылок</div>
+                <div class="section-desc">Охват и эффективность отправленных уведомлений.</div>
+                <div class="bcast-stats-grid">
+                    <div class="bcast-stat">
+                        <div class="bcast-stat-icon">📨</div>
+                        <div class="bcast-stat-val" id="bs-sent">0</div>
+                        <div class="bcast-stat-label">Отправлено</div>
+                        <div class="bcast-stat-pct">всего</div>
+                    </div>
+                    <div class="bcast-stat">
+                        <div class="bcast-stat-icon">✅</div>
+                        <div class="bcast-stat-val" id="bs-delivered">0</div>
+                        <div class="bcast-stat-label">Доставлено</div>
+                        <div class="bcast-stat-pct" id="bs-del-pct">0%</div>
+                    </div>
+                    <div class="bcast-stat">
+                        <div class="bcast-stat-icon">👀</div>
+                        <div class="bcast-stat-val" id="bs-opened">0</div>
+                        <div class="bcast-stat-label">Открыто</div>
+                        <div class="bcast-stat-pct" id="bs-open-pct">0%</div>
+                    </div>
+                    <div class="bcast-stat">
+                        <div class="bcast-stat-icon">👆</div>
+                        <div class="bcast-stat-val" id="bs-clicked">0</div>
+                        <div class="bcast-stat-label">Кликов</div>
+                        <div class="bcast-stat-pct" id="bs-click-pct">0%</div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+                <div class="card-box">
+                    <div class="card-box-header"><span class="card-box-title">История уведомлений</span></div>
+                    <div class="log-list" id="push-log"></div>
+                </div>
+            </section>
+
+            <!-- ═══ LOYALTY ═══ -->
+            <section class="section" id="sec-loyalty">
+                <div class="section-heading">Бонусная программа</div>
+                <div class="section-desc">Настройте кешбек, пороги уровней и активацию карт.</div>
+
+                <div class="card-box" style="padding:20px;margin-bottom:16px">
+                    <div class="card-box-title" style="margin-bottom:16px">💳 Активация карты лояльности</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Мин. сумма разовой покупки для активации (сум)</label>
+                            <input id="activation-amount" type="number" min="0" placeholder="50000">
+                        </div>
+                        <div class="form-group">
+                            <label>Курс обмена баллов (1 балл = X сум)</label>
+                            <input id="points-rate" type="number" min="1" placeholder="100">
+                        </div>
+                    </div>
+                    <div
+                        style="margin-top:10px;padding:10px;background:rgba(108,99,255,0.08);border-radius:10px;border:1px solid rgba(108,99,255,0.15);font-size:12px;color:var(--muted)">
+                        💡 Карта активируется автоматически при первой покупке на указанную или большую сумму.
+                    </div>
+                </div>
+
+                <div class="card-box-title" style="margin-bottom:12px">🏅 Кешбек и пороги по уровням</div>
+                <div class="level-cashback-grid">
+                    <div class="level-card">
+                        <div class="level-card-title"><span>🥉</span><span style="color:#cd7f32">Bronze</span></div>
+                        <div class="form-group" style="margin-bottom:10px"><label>Кешбек %</label><input
+                                id="bronze-cash" type="number" min="0" max="100" placeholder="3"></div>
+                        <div class="form-group"><label>Порог накопления (баллов)</label><input id="bronze-thresh"
+                                type="number" min="0" placeholder="0 — стартовый"></div>
+                    </div>
+                    <div class="level-card">
+                        <div class="level-card-title"><span>🥈</span><span style="color:#c0c0c0">Silver</span></div>
+                        <div class="form-group" style="margin-bottom:10px"><label>Кешбек %</label><input
+                                id="silver-cash" type="number" min="0" max="100" placeholder="5"></div>
+                        <div class="form-group"><label>Мин. баллов для получения</label><input id="silver-thresh"
+                                type="number" min="0" placeholder="1000"></div>
+                    </div>
+                    <div class="level-card">
+                        <div class="level-card-title"><span>🥇</span><span style="color:#ffd700">Gold</span></div>
+                        <div class="form-group" style="margin-bottom:10px"><label>Кешбек %</label><input id="gold-cash"
+                                type="number" min="0" max="100" placeholder="10"></div>
+                        <div class="form-group"><label>Мин. баллов для получения</label><input id="gold-thresh"
+                                type="number" min="0" placeholder="5000"></div>
+                    </div>
+                </div>
+                <div class="form-actions" style="margin-top:16px">
+                    <button class="btn btn-ghost" onclick="loadLoyalty()">Сбросить</button>
+                    <button class="btn btn-primary" onclick="saveLoyalty()">💾 Сохранить настройки</button>
+                </div>
+            </section>
+
+            <!-- ═══ USERS ═══ -->
+            <section class="section" id="sec-users">
+                <div class="section-heading">Пользователи</div>
+                <div class="section-desc">Все зарегистрированные пользователи KOSKO.</div>
+                <div class="card-box">
+                    <div class="card-box-header">
+                        <span class="card-box-title">Клиенты</span>
+                        <input class="search-input" placeholder="🔍 Поиск по имени или карте..."
+                            oninput="filterUsers(this.value)">
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Имя</th>
+                                <th>Телефон</th>
+                                <th>№ карты</th>
+                                <th>Уровень</th>
+                                <th>Баллы</th>
+                                <th>Карта активна</th>
+                                <th>Регистрация</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ═══ EXPORT ═══ -->
+            <section class="section" id="sec-export">
+                <div class="section-heading">Экспорт данных</div>
+                <div class="section-desc">Скачайте JSON-файл для передачи данных в мобильное приложение или на сервер.
+                </div>
+                <div class="card-box" style="padding:24px">
+                    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Пакет данных включает: акции,
+                        настройки бонусной программы, список пользователей.</div>
+                    <pre id="json-preview"
+                        style="background:#0a0a14;border:1px solid var(--border);border-radius:12px;padding:16px;font-size:11px;color:#a78bfa;overflow:auto;max-height:360px;line-height:1.6"></pre>
+                    <div class="form-actions" style="margin-top:16px">
+                        <button class="btn btn-ghost" onclick="refreshJson()">🔄 Обновить</button>
+                        <button class="btn btn-primary" onclick="downloadJson()">⬇️ Скачать kosko_data.json</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══ ANALYTICS ═══ -->
+            <section class="section" id="sec-analytics">
+                <div class="section-heading">Аналитика</div>
+                <div class="section-desc">Выручка, активность пользователей и ключевые метрики.</div>
+                <div class="analytics-row" style="margin-bottom:16px">
+                    <div class="metric-card">
+                        <div class="metric-title">DAU (ежедневно)</div>
+                        <div class="metric-val" id="an-dau">0</div>
+                        <div class="metric-sub">активных пользователей</div>
+                        <div class="metric-bar">
+                            <div class="metric-bar-fill" id="an-dau-bar" style="width:0%"></div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">MAU (ежемесячно)</div>
+                        <div class="metric-val" id="an-mau">0</div>
+                        <div class="metric-sub">активных пользователей</div>
+                        <div class="metric-bar">
+                            <div class="metric-bar-fill" id="an-mau-bar" style="width:0%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">💰 Выручка за 7 дней (сум)</div>
+                    <div class="chart-bar-row" id="revenue-chart"></div>
+                </div>
+                <div class="analytics-row">
+                    <div class="metric-card">
+                        <div class="metric-title">Средний чек</div>
+                        <div class="metric-val" id="an-avg">0</div>
+                        <div class="metric-sub">сум</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">Конверсия карт</div>
+                        <div class="metric-val" id="an-conv">0%</div>
+                        <div class="metric-sub">пользователи → активные карты</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══ STORE SCHEDULE ═══ -->
+            <section class="section" id="sec-schedule">
+                <div class="section-heading">Расписание магазинов</div>
+                <div class="section-desc">Управление рабочими часами магазинов KOSKO.</div>
+                <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+                    <button class="btn btn-primary" onclick="openStoreModal()">➕ Добавить магазин</button>
+                </div>
+                <div id="stores-list"></div>
+            </section>
+
+            <!-- ═══ PRODUCTS ═══ -->
+            <section class="section" id="sec-products">
+                <div class="section-heading">Управление товарами и ценами</div>
+                <div class="section-desc">Добавление, редактирование и удаление товаров из каталога KOSKO.</div>
+                <div class="card-box">
+                    <div class="card-box-header">
+                        <span class="card-box-title">Каталог</span>
+                        <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ Добавить товар</button>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Категория</th>
+                                <th>Цена (сум)</th>
+                                <th>Статус</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="products-table"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ═══ ORDERS ═══ -->
+            <section class="section" id="sec-orders">
+                <div class="section-heading">Заказы и доставка</div>
+                <div class="section-desc">Управление режимами заказов и доставки.</div>
+                <div class="card-box" style="padding:20px">
+                    <div class="toggle-row">
+                        <div class="toggle-label"><b>🛒 Онлайн-заказы</b><span>Приём заказов через приложение</span>
+                        </div>
+                        <div class="toggle on" id="tgl-orders" onclick="toggleSwitch(this)"></div>
+                    </div>
+                    <div class="toggle-row">
+                        <div class="toggle-label"><b>🚚 Доставка</b><span>Доставка на дом / в офис</span></div>
+                        <div class="toggle on" id="tgl-delivery" onclick="toggleSwitch(this)"></div>
+                    </div>
+                    <div class="toggle-row">
+                        <div class="toggle-label"><b>🏪 Самовывоз</b><span>Забрать из магазина</span></div>
+                        <div class="toggle on" id="tgl-pickup" onclick="toggleSwitch(this)"></div>
+                    </div>
+                    <div class="toggle-row">
+                        <div class="toggle-label"><b>⏰ Расписание доставки</b><span>Ограничение по времени
+                                доставки</span></div>
+                        <div class="toggle" id="tgl-sched" onclick="toggleSwitch(this)"></div>
+                    </div>
+                </div>
+                <div class="divider"></div>
+                <div class="card-box" style="padding:20px">
+                    <div class="card-box-title" style="margin-bottom:14px">⏰ Часы доставки</div>
+                    <div class="form-grid">
+                        <div class="form-group"><label>Начало</label><input id="del-start" type="time" value="09:00">
+                        </div>
+                        <div class="form-group"><label>Конец</label><input id="del-end" type="time" value="22:00"></div>
+                    </div>
+                    <div class="form-group" style="margin-top:12px"><label>Мин. сумма для бесплатной доставки
+                            (сум)</label><input id="del-min" type="number" value="100000" placeholder="100000"></div>
+                    <div class="form-actions" style="margin-top:14px"><button class="btn btn-primary"
+                            onclick="saveOrders()">💾 Сохранить</button></div>
+                </div>
+            </section>
+
+            <!-- ═══ REFERRALS ═══ -->
+            <section class="section" id="sec-referrals">
+                <div class="section-heading">Реферальная программа</div>
+                <div class="section-desc">Настройка бонусов за приглашение друзей.</div>
+                <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+                    <div class="stat-card c1">
+                        <div class="stat-icon">🤝</div>
+                        <div class="stat-val" id="ref-total">0</div>
+                        <div class="stat-label">Всего рефералов</div>
+                    </div>
+                    <div class="stat-card c3">
+                        <div class="stat-icon">💰</div>
+                        <div class="stat-val" id="ref-bonus">0</div>
+                        <div class="stat-label">Выдано бонусов</div>
+                    </div>
+                    <div class="stat-card c4">
+                        <div class="stat-icon">📈</div>
+                        <div class="stat-val" id="ref-conv">0%</div>
+                        <div class="stat-label">Конверсия</div>
+                    </div>
+                </div>
+                <div class="card-box" style="padding:20px;margin-bottom:16px">
+                    <div class="card-box-title" style="margin-bottom:14px">⚙️ Настройки</div>
+                    <div class="form-grid">
+                        <div class="form-group"><label>Бонус пригласившему (баллы)</label><input id="ref-inviter"
+                                type="number" value="500" placeholder="500"></div>
+                        <div class="form-group"><label>Бонус приглашённому (баллы)</label><input id="ref-invitee"
+                                type="number" value="200" placeholder="200"></div>
+                    </div>
+                    <div class="form-actions" style="margin-top:14px"><button class="btn btn-primary"
+                            onclick="saveReferrals()">💾 Сохранить</button></div>
+                </div>
+                <div class="card-box">
+                    <div class="card-box-header"><span class="card-box-title">Топ рефереров</span></div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Пользователь</th>
+                                <th>Приглашено</th>
+                                <th>Бонус</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ref-table"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ═══ PROMO CODES ═══ -->
+            <section class="section" id="sec-codes">
+                <div class="section-heading">Промокоды</div>
+                <div class="section-desc">Создание и управление промокодами для клиентов KOSKO.</div>
+                <div class="card-box">
+                    <div class="card-box-header">
+                        <span class="card-box-title">Активные промокоды</span>
+                        <button class="btn btn-primary btn-sm" onclick="openCodeModal()">+ Создать код</button>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Код</th>
+                                <th>Скидка</th>
+                                <th>Использований</th>
+                                <th>До</th>
+                                <th>Статус</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="codes-table"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ═══ CHAT ═══ -->
+            <section class="section" id="sec-chat">
+                <div class="section-heading">Чат поддержки</div>
+                <div class="section-desc">Онлайн-чат с клиентами KOSKO.</div>
+                <div class="chat-container">
+                    <div class="chat-layout">
+                        <div class="chat-list" id="chat-users"></div>
+                        <div class="chat-body">
+                            <div class="chat-messages" id="chat-messages"></div>
+                            <div class="chat-input-row">
+                                <input class="chat-input" id="chat-input" placeholder="Напишите ответ..."
+                                    onkeydown="if(event.key==='Enter')sendChat()">
+                                <button class="btn btn-primary" onclick="sendChat()">➡️</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div><!-- /content-area -->
+    </div><!-- /main -->
+
+    <!-- PREVIEW PANEL -->
+    <div class="preview-panel">
+        <div class="preview-header">📱 Превью приложения</div>
+        <div class="preview-body">
+            <div class="phone-mini">
+                <div style="display:flex;justify-content:center">
+                    <div class="pm-notch"></div>
+                </div>
+                <div class="pm-header">
+                    <div class="pm-logo">KOSKO</div>
+                    <div class="pm-ava">А</div>
+                </div>
+                <div class="pm-banner" id="pm-banner">
+                    <div class="pm-banner-badge">🔥 АКЦИЯ</div>
+                    <h4 id="pm-banner-title">Добавьте первую акцию</h4>
+                    <p id="pm-banner-desc">Она появится здесь</p>
+                </div>
+                <div class="pm-card-section">
+                    <div class="pm-section-label">Моя карта</div>
+                    <div class="pm-loyalty">
+                        <div class="pm-loyalty-logo">KOSKO</div>
+                        <div class="pm-loyalty-level" id="pm-level">Bronze</div>
+                        <div class="pm-loyalty-pts">1 250 баллов</div>
+                    </div>
+                </div>
+                <div class="pm-cashback">
+                    <div class="pm-section-label">Кешбек по уровням</div>
+                    <div class="pm-cashback-row">
+                        <div class="pm-cb-badge">
+                            <div class="lvl">Bronze</div>
+                            <div class="pct" id="pm-bronze">3%</div>
+                        </div>
+                        <div class="pm-cb-badge">
+                            <div class="lvl">Silver</div>
+                            <div class="pct" id="pm-silver">5%</div>
+                        </div>
+                        <div class="pm-cb-badge">
+                            <div class="lvl">Gold</div>
+                            <div class="pct" id="pm-gold">10%</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="pm-nav">
+                    <div class="pm-nav-i">🏠<span>Главная</span></div>
+                    <div class="pm-nav-i">💳<span>Карта</span></div>
+                    <div class="pm-nav-i">🔔<span>Акции</span></div>
+                    <div class="pm-nav-i">👤<span>Профиль</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL -->
+    <div class="modal-overlay" id="promo-modal">
+        <div class="modal">
+            <div class="modal-title">
+                <span id="modal-title-text">Добавить акцию</span>
+                <button class="modal-close" onclick="closePromoModal()">✕</button>
+            </div>
+            <div class="form-grid full" style="gap:14px">
+                <input type="hidden" id="edit-promo-id">
+                <div class="form-group"><label>Название акции</label><input id="promo-name"
+                        placeholder="Например: Скидка 20% на всё!"></div>
+                <div class="form-group"><label>Описание</label><textarea id="promo-desc"
+                        placeholder="Подробности акции..."></textarea></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>Дата начала</label><input id="promo-start" type="date"></div>
+                    <div class="form-group"><label>Дата окончания</label><input id="promo-end" type="date"></div>
+                </div>
+                <div class="form-group"><label>Статус</label>
+                    <select id="promo-status">
+                        <option value="active">Активна</option>
+                        <option value="inactive">Неактивна</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-ghost" onclick="closePromoModal()">Отмена</button>
+                    <button class="btn btn-primary" onclick="savePromo()">💾 Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STORE MODAL -->
+    <div class="modal-overlay" id="store-modal">
+        <div class="modal">
+            <div class="modal-title">
+                <span id="store-modal-title">Добавить магазин</span>
+                <button class="modal-close" onclick="closeStoreModal()">✕</button>
+            </div>
+            <div class="form-grid full" style="gap:14px">
+                <input type="hidden" id="edit-store-id">
+                <div class="form-group"><label>Название магазина</label><input id="store-name"
+                        placeholder="Например: KOSKO Центральный"></div>
+                <div class="form-group"><label>Адрес</label><input id="store-address"
+                        placeholder="ул. Навои 23, Ташкент"></div>
+                <div class="form-grid">
+                    <div class="form-group"><label>Время открытия</label><input id="store-open" type="time"
+                            value="09:00"></div>
+                    <div class="form-group"><label>Время закрытия</label><input id="store-close" type="time"
+                            value="21:00"></div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-ghost" onclick="closeStoreModal()">Отмена</button>
+                    <button class="btn btn-primary" onclick="saveStore()">💾 Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ─── STATE ────────────────────────────────────────
+        let state = {
+            promotions: [],
+            users: [],
+            loyalty: {
+                activationAmount: 50000,
+                pointsRate: 100,
+                bronze: { cashback: 3, threshold: 0 },
+                silver: { cashback: 5, threshold: 1000 },
+                gold: { cashback: 10, threshold: 5000 }
+            },
+            pushLog: [],
+            activityLog: []
+        };
+
+        function save() { localStorage.setItem('kosko_admin', JSON.stringify(state)); }
+        function load() {
+            const d = localStorage.getItem('kosko_admin');
+            if (d) state = JSON.parse(d);
+            if (!state.promotions) state.promotions = [];
+            if (!state.users) state.users = sampleUsers();
+            if (!state.loyalty) state.loyalty = { activationAmount: 50000, pointsRate: 100, bronze: { cashback: 3, threshold: 0 }, silver: { cashback: 5, threshold: 1000 }, gold: { cashback: 10, threshold: 5000 } };
+            if (!state.pushLog) state.pushLog = [];
+            if (!state.activityLog) state.activityLog = [
+                { type: 'success', text: 'Пользователь Алишер А. зарегистрировался', time: now() },
+                { type: 'info', text: 'Акция "Скидка на кофе" активирована', time: now() },
+                { type: 'success', text: 'Карта 1001-2345 активирована (покупка 78 000 сум)', time: now() },
+                { type: 'warn', text: 'Акция "Летний sale" завершена', time: now() },
+            ];
+        }
+
+        function sampleUsers() {
+            return [
+                { id: 1, name: 'Алишер Акбаров', phone: '+998 90 123 45 67', card: '1001-2345', level: 'gold', points: 5800, active: true, date: '01.02.2026' },
+                { id: 2, name: 'Зарина Исмоилова', phone: '+998 91 234 56 78', card: '1001-2346', level: 'silver', points: 2100, active: true, date: '10.02.2026' },
+                { id: 3, name: 'Бобур Юсупов', phone: '+998 93 345 67 89', card: '1001-2347', level: 'bronze', points: 340, active: true, date: '20.02.2026' },
+                { id: 4, name: 'Нилуфар Раджабова', phone: '+998 94 456 78 90', card: '1001-2348', level: 'bronze', points: 0, active: false, date: '01.03.2026' },
+                { id: 5, name: 'Санжар Мирзаев', phone: '+998 95 567 89 01', card: '1001-2349', level: 'silver', points: 1500, active: true, date: '02.03.2026' },
+            ];
+        }
+
+        // ─── CLOCK ────────────────────────────────────────
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+        setInterval(updateClock, 1000); updateClock();
+        function now() { return new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
+
+        // ─── NAVIGATION ───────────────────────────────────
+        const titles = { dashboard: 'Dashboard', promotions: 'Управление акциями', push: 'Push-уведомления', loyalty: 'Бонусная программа', users: 'Пользователи', export: 'Экспорт данных', analytics: 'Аналитика', schedule: 'Расписание магазинов', products: 'Товары и цены', orders: 'Заказы и доставка', referrals: 'Реферальная программа', codes: 'Промокоды', chat: 'Чат поддержки' };
+        function goTo(id, el) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById('sec-' + id).classList.add('active');
+            el.classList.add('active');
+            document.getElementById('pageTitle').textContent = titles[id];
+            if (id === 'dashboard') renderDashboard();
+            if (id === 'promotions') renderPromos();
+            if (id === 'loyalty') loadLoyalty();
+            if (id === 'users') renderUsers();
+            if (id === 'export') refreshJson();
+            if (id === 'analytics') renderAnalytics();
+            if (id === 'schedule') renderStores();
+            if (id === 'products') renderProducts();
+            if (id === 'orders') loadOrders();
+            if (id === 'referrals') renderReferrals();
+            if (id === 'codes') renderCodes();
+            if (id === 'chat') renderChat();
+        }
+
+        // ─── TOAST ────────────────────────────────────────
+        function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
+
+        // ─── SYNC ─────────────────────────────────────────
+        function syncToApp() {
+            save();
+            addLog('success', 'Данные синхронизированы с приложением');
+            document.getElementById('lastSync').textContent = now();
+            toast('✅ Синхронизация выполнена!');
+            updatePreview();
+        }
+
+        // ─── DASHBOARD ────────────────────────────────────
+        function renderDashboard() {
+            const activePromos = state.promotions.filter(p => p.status === 'active').length;
+            const activeCards = state.users.filter(u => u.active).length;
+            const totalPts = state.users.reduce((a, u) => a + u.points, 0);
+            document.getElementById('stat-users').textContent = state.users.length;
+            document.getElementById('stat-cards').textContent = activeCards;
+            document.getElementById('stat-promos').textContent = activePromos;
+            document.getElementById('stat-pts').textContent = totalPts.toLocaleString();
+            renderLog();
+        }
+        function addLog(type, text) { state.activityLog.unshift({ type, text, time: now() }); if (state.activityLog.length > 50) state.activityLog.pop(); save(); renderLog(); }
+        function renderLog() {
+            const el = document.getElementById('log-list');
+            if (!el) return;
+            el.innerHTML = state.activityLog.map(l => `<div class="log-item"><div class="log-dot ${l.type}"></div><div class="log-text">${l.text}</div><div class="log-time">${l.time}</div></div>`).join('') || '<div class="empty-state">Нет событий</div>';
+        }
+
+        // ─── PROMOTIONS ───────────────────────────────────
+        function renderPromos() {
+            const tb = document.getElementById('promo-table');
+            if (!state.promotions.length) { tb.innerHTML = '<tr><td colspan="5" class="empty-state">Нет акций. Добавьте первую!</td></tr>'; updatePreview(); return; }
+            tb.innerHTML = state.promotions.map(p => `
+    <tr>
+      <td><b>${p.name}</b></td>
+      <td style="color:var(--muted);max-width:200px">${p.desc}</td>
+      <td>${p.end || '—'}</td>
+      <td><span class="badge badge-${p.status === 'active' ? 'active' : 'inactive'}">${p.status === 'active' ? 'Активна' : 'Неактивна'}</span></td>
+      <td style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="editPromo(${p.id})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deletePromo(${p.id})">🗑</button>
+      </td>
+    </tr>`).join('');
+            updatePreview();
+        }
+
+        function openPromoModal() { document.getElementById('edit-promo-id').value = ''; document.getElementById('modal-title-text').textContent = 'Добавить акцию'; document.getElementById('promo-name').value = ''; document.getElementById('promo-desc').value = ''; document.getElementById('promo-start').value = ''; document.getElementById('promo-end').value = ''; document.getElementById('promo-status').value = 'active'; document.getElementById('promo-modal').classList.add('open'); }
+        function closePromoModal() { document.getElementById('promo-modal').classList.remove('open'); }
+        function editPromo(id) {
+            const p = state.promotions.find(x => x.id === id); if (!p) return;
+            document.getElementById('edit-promo-id').value = id;
+            document.getElementById('modal-title-text').textContent = 'Редактировать акцию';
+            document.getElementById('promo-name').value = p.name;
+            document.getElementById('promo-desc').value = p.desc;
+            document.getElementById('promo-start').value = p.start || '';
+            document.getElementById('promo-end').value = p.end || '';
+            document.getElementById('promo-status').value = p.status;
+            document.getElementById('promo-modal').classList.add('open');
+        }
+        function savePromo() {
+            const name = document.getElementById('promo-name').value.trim();
+            const desc = document.getElementById('promo-desc').value.trim();
+            if (!name) { toast('⚠️ Введите название акции'); return; }
+            const o = { name, desc, start: document.getElementById('promo-start').value, end: document.getElementById('promo-end').value, status: document.getElementById('promo-status').value };
+            const editId = document.getElementById('edit-promo-id').value;
+            if (editId) { const i = state.promotions.findIndex(x => x.id == editId); state.promotions[i] = { ...o, id: Number(editId) }; addLog('info', `Акция "${name}" обновлена`); }
+            else { o.id = Date.now(); state.promotions.push(o); addLog('success', `Акция "${name}" добавлена`); }
+            save(); closePromoModal(); renderPromos(); renderDashboard(); toast('✅ Акция сохранена!');
+        }
+        function deletePromo(id) { if (!confirm('Удалить акцию?')) return; const p = state.promotions.find(x => x.id === id); state.promotions = state.promotions.filter(x => x.id !== id); addLog('warn', `Акция "${p?.name}" удалена`); save(); renderPromos(); renderDashboard(); toast('🗑 Акция удалена'); }
+
+        // ─── PUSH ────────────────────────────────────────
+        function sendPush() {
+            const title = document.getElementById('push-title').value.trim();
+            const body = document.getElementById('push-body').value.trim();
+            if (!title || !body) { toast('⚠️ Заполните заголовок и текст'); return; }
+            const aud = document.getElementById('push-audience').value;
+            const audTxt = aud === 'all' ? 'Всем' : aud.charAt(0).toUpperCase() + aud.slice(1) + ' уровень';
+            const schedDate = document.getElementById('push-date').value;
+            const schedTime = document.getElementById('push-time').value;
+            const isScheduled = schedDate && schedTime;
+            const schedLabel = isScheduled ? `${schedDate} ${schedTime}` : null;
+            // Simulate audience size
+            let audSize = state.users.length;
+            if (aud !== 'all') audSize = state.users.filter(u => u.level === aud).length;
+            // Simulate broadcast stats
+            const delivered = Math.max(1, Math.floor(audSize * (0.85 + Math.random() * 0.15)));
+            const opened = Math.max(1, Math.floor(delivered * (0.4 + Math.random() * 0.35)));
+            const clicked = Math.max(0, Math.floor(opened * (0.2 + Math.random() * 0.3)));
+            const entry = { title, body, audience: audTxt, time: now(), scheduled: schedLabel, stats: { sent: audSize, delivered, opened, clicked } };
+            state.pushLog.unshift(entry);
+            const schedMsg = isScheduled ? ` (запланировано на ${schedLabel})` : '';
+            addLog('push', `Push отправлен: "${title}" → ${audTxt}${schedMsg}`);
+            save(); renderPushLog(); renderBcastStats(); clearPush();
+            toast(isScheduled ? `⏰ Запланировано на ${schedLabel}` : '🔔 Уведомление отправлено!');
+        }
+        function clearPush() {
+            document.getElementById('push-title').value = '';
+            document.getElementById('push-body').value = '';
+            document.getElementById('push-audience').value = 'all';
+            document.getElementById('push-date').value = '';
+            document.getElementById('push-time').value = '';
+        }
+        function renderPushLog() {
+            const el = document.getElementById('push-log'); if (!el) return;
+            el.innerHTML = state.pushLog.map(p => {
+                const schedBadge = p.scheduled ? `<span class="schedule-badge">⏰ ${p.scheduled}</span>` : `<span class="schedule-badge now">⚡ Сейчас</span>`;
+                const statsLine = p.stats ? ` <span style="color:var(--muted);font-size:10px">📨${p.stats.sent} ✅${p.stats.delivered} 👀${p.stats.opened} 👆${p.stats.clicked}</span>` : '';
+                return `<div class="log-item"><div class="log-dot push"></div><div class="log-text"><b>${p.title}</b> — ${p.body} <span style="color:var(--violet);font-size:11px">[${p.audience}]</span> ${schedBadge}${statsLine}</div><div class="log-time">${p.time}</div></div>`;
+            }).join('') || '<div class="empty-state">История пуста</div>';
+        }
+        function renderBcastStats() {
+            const totals = state.pushLog.reduce((a, p) => {
+                if (p.stats) { a.sent += p.stats.sent; a.delivered += p.stats.delivered; a.opened += p.stats.opened; a.clicked += p.stats.clicked; }
+                return a;
+            }, { sent: 0, delivered: 0, opened: 0, clicked: 0 });
+            document.getElementById('bs-sent').textContent = totals.sent;
+            document.getElementById('bs-delivered').textContent = totals.delivered;
+            document.getElementById('bs-opened').textContent = totals.opened;
+            document.getElementById('bs-clicked').textContent = totals.clicked;
+            document.getElementById('bs-del-pct').textContent = totals.sent ? Math.round(totals.delivered / totals.sent * 100) + '%' : '0%';
+            document.getElementById('bs-open-pct').textContent = totals.delivered ? Math.round(totals.opened / totals.delivered * 100) + '%' : '0%';
+            document.getElementById('bs-click-pct').textContent = totals.opened ? Math.round(totals.clicked / totals.opened * 100) + '%' : '0%';
+        }
+
+        // ─── LOYALTY ──────────────────────────────────────
+        function loadLoyalty() {
+            const l = state.loyalty;
+            document.getElementById('activation-amount').value = l.activationAmount || 50000;
+            document.getElementById('points-rate').value = l.pointsRate || 100;
+            document.getElementById('bronze-cash').value = l.bronze.cashback;
+            document.getElementById('bronze-thresh').value = l.bronze.threshold;
+            document.getElementById('silver-cash').value = l.silver.cashback;
+            document.getElementById('silver-thresh').value = l.silver.threshold;
+            document.getElementById('gold-cash').value = l.gold.cashback;
+            document.getElementById('gold-thresh').value = l.gold.threshold;
+        }
+        function saveLoyalty() {
+            state.loyalty = {
+                activationAmount: Number(document.getElementById('activation-amount').value) || 50000,
+                pointsRate: Number(document.getElementById('points-rate').value) || 100,
+                bronze: { cashback: Number(document.getElementById('bronze-cash').value) || 3, threshold: Number(document.getElementById('bronze-thresh').value) || 0 },
+                silver: { cashback: Number(document.getElementById('silver-cash').value) || 5, threshold: Number(document.getElementById('silver-thresh').value) || 1000 },
+                gold: { cashback: Number(document.getElementById('gold-cash').value) || 10, threshold: Number(document.getElementById('gold-thresh').value) || 5000 },
+            };
+            save(); updatePreview(); addLog('info', 'Настройки бонусной программы обновлены'); toast('✅ Настройки сохранены!');
+        }
+
+        // ─── USERS ────────────────────────────────────────
+        function renderUsers(filter = '') {
+            const tb = document.getElementById('users-table'); if (!tb) return;
+            const rows = state.users.filter(u => !filter || u.name.toLowerCase().includes(filter.toLowerCase()) || u.card.includes(filter));
+            const lvlBadge = { bronze: 'badge-bronze', silver: 'badge-silver', gold: 'badge-gold' };
+            const lvlIcon = { bronze: '🥉', silver: '🥈', gold: '🥇' };
+            tb.innerHTML = rows.map(u => `<tr>
+    <td><b>${u.name}</b></td><td>${u.phone}</td><td style="font-size:12px;letter-spacing:1px">${u.card}</td>
+    <td><span class="badge ${lvlBadge[u.level]}">${lvlIcon[u.level]} ${u.level.charAt(0).toUpperCase() + u.level.slice(1)}</span></td>
+    <td><b>${u.points.toLocaleString()}</b></td>
+    <td><span class="badge ${u.active ? 'badge-active' : 'badge-inactive'}">${u.active ? 'Активна' : 'Неактивна'}</span></td>
+    <td style="color:var(--muted)">${u.date}</td>
+  </tr>`).join('');
+        }
+        function filterUsers(v) { renderUsers(v); }
+
+        // ─── EXPORT ───────────────────────────────────────
+        function getExportData() {
+            return {
+                meta: { version: '1.0', exported: new Date().toISOString(), app: 'KOSKO' },
+                loyalty: state.loyalty,
+                promotions: state.promotions,
+                users_count: state.users.length,
+                users: state.users
+            };
+        }
+        function refreshJson() { const el = document.getElementById('json-preview'); if (el) el.textContent = JSON.stringify(getExportData(), null, 2); }
+        function downloadJson() {
+            const data = JSON.stringify(getExportData(), null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'kosko_data.json'; a.click();
+            addLog('info', 'Данные экспортированы в kosko_data.json'); toast('✅ Файл скачан!');
+        }
+
+        // ─── PREVIEW ──────────────────────────────────────
+        function updatePreview() {
+            const activePromo = state.promotions.find(p => p.status === 'active');
+            document.getElementById('pm-banner-title').textContent = activePromo ? activePromo.name : 'Нет активных акций';
+            document.getElementById('pm-banner-desc').textContent = activePromo ? (activePromo.desc || activePromo.end || '') : 'Добавьте акцию в панели';
+            const l = state.loyalty;
+            document.getElementById('pm-bronze').textContent = (l.bronze?.cashback || 3) + '%';
+            document.getElementById('pm-silver').textContent = (l.silver?.cashback || 5) + '%';
+            document.getElementById('pm-gold').textContent = (l.gold?.cashback || 10) + '%';
+        }
+
+        // ─── INIT ─────────────────────────────────────────
+        load();
+        renderDashboard();
+        renderPushLog();
+        renderBcastStats();
+        updatePreview();
+
+        // ─── ANALYTICS ──────────────────────────────────────
+        function renderAnalytics() {
+            const users = state.users.length;
+            const activeCards = state.users.filter(u => u.active).length;
+            const dau = Math.max(1, Math.floor(users * (0.3 + Math.random() * 0.3)));
+            const mau = Math.max(dau, Math.floor(users * (0.6 + Math.random() * 0.35)));
+            document.getElementById('an-dau').textContent = dau;
+            document.getElementById('an-mau').textContent = mau;
+            document.getElementById('an-dau-bar').style.width = (users ? Math.round(dau / users * 100) : 0) + '%';
+            document.getElementById('an-mau-bar').style.width = (users ? Math.round(mau / users * 100) : 0) + '%';
+            // Revenue chart
+            const days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+            const revenues = days.map(() => Math.floor(800000 + Math.random() * 2200000));
+            const maxRev = Math.max(...revenues);
+            const chart = document.getElementById('revenue-chart');
+            chart.innerHTML = revenues.map((r, i) => `<div class="chart-bar-col"><div class="chart-bar-val">${(r / 1000000).toFixed(1)}M</div><div class="chart-bar" style="height:${Math.round(r / maxRev * 100)}px"></div><div class="chart-bar-label">${days[i]}</div></div>`).join('');
+            // Avg check & conversion
+            const avgCheck = Math.floor(35000 + Math.random() * 45000);
+            document.getElementById('an-avg').textContent = avgCheck.toLocaleString();
+            const conv = users ? Math.round(activeCards / users * 100) : 0;
+            document.getElementById('an-conv').textContent = conv + '%';
+        }
+
+        // ─── STORE SCHEDULE ─────────────────────────────────
+        if (!state.stores) {
+            state.stores = [
+                { id: 1, name: 'KOSKO Центральный', address: 'ул. Навои 23, Ташкент', hours: { mon: '09:00–21:00', tue: '09:00–21:00', wed: '09:00–21:00', thu: '09:00–21:00', fri: '09:00–22:00', sat: '09:00–22:00', sun: '10:00–20:00' } },
+                { id: 2, name: 'KOSKO Юнусабад', address: 'микрорайон TTZ, Ташкент', hours: { mon: '08:00–22:00', tue: '08:00–22:00', wed: '08:00–22:00', thu: '08:00–22:00', fri: '08:00–23:00', sat: '08:00–23:00', sun: '09:00–21:00' } },
+            ];
+            save();
+        }
+
+        function renderStores() {
+            const el = document.getElementById('stores-list');
+            const dayNames = { mon: 'Пн', tue: 'Вт', wed: 'Ср', thu: 'Чт', fri: 'Пт', sat: 'Сб', sun: 'Вс' };
+            const dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+            el.innerHTML = state.stores.map(s => `
+                <div class="store-card">
+                    <div class="store-card-header">
+                        <div class="store-name">🏪 ${s.name}</div>
+                        <div style="display:flex;gap:6px">
+                            <button class="btn btn-ghost btn-sm" onclick="editStore(${s.id})">✏️</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteStore(${s.id})">🗑</button>
+                        </div>
+                    </div>
+                    <div class="store-address">📍 ${s.address}</div>
+                    <div class="schedule-grid">
+                        ${dayKeys.map(d => `<div class="day-col"><div class="day-label">${dayNames[d]}</div><div class="day-time">${s.hours[d] || '—'}</div></div>`).join('')}
+                    </div>
+                </div>
+            `).join('') || '<div class="empty-state">Нет магазинов. Добавьте первый!</div>';
+        }
+
+        function openStoreModal(id) {
+            document.getElementById('edit-store-id').value = '';
+            document.getElementById('store-modal-title').textContent = 'Добавить магазин';
+            document.getElementById('store-name').value = '';
+            document.getElementById('store-address').value = '';
+            document.getElementById('store-open').value = '09:00';
+            document.getElementById('store-close').value = '21:00';
+            document.getElementById('store-modal').classList.add('open');
+        }
+        function closeStoreModal() { document.getElementById('store-modal').classList.remove('open'); }
+
+        function editStore(id) {
+            const s = state.stores.find(x => x.id === id); if (!s) return;
+            document.getElementById('edit-store-id').value = id;
+            document.getElementById('store-modal-title').textContent = 'Редактировать магазин';
+            document.getElementById('store-name').value = s.name;
+            document.getElementById('store-address').value = s.address;
+            const openTime = (s.hours.mon || '09:00–21:00').split('–')[0] || '09:00';
+            const closeTime = (s.hours.mon || '09:00–21:00').split('–')[1] || '21:00';
+            document.getElementById('store-open').value = openTime;
+            document.getElementById('store-close').value = closeTime;
+            document.getElementById('store-modal').classList.add('open');
+        }
+
+        function saveStore() {
+            const name = document.getElementById('store-name').value.trim();
+            const address = document.getElementById('store-address').value.trim();
+            if (!name) { toast('⚠️ Введите название магазина'); return; }
+            const openT = document.getElementById('store-open').value || '09:00';
+            const closeT = document.getElementById('store-close').value || '21:00';
+            const h = `${openT}–${closeT}`;
+            const editId = document.getElementById('edit-store-id').value;
+            if (editId) {
+                const s = state.stores.find(x => x.id == editId);
+                if (s) { s.name = name; s.address = address; s.hours = { mon: h, tue: h, wed: h, thu: h, fri: h, sat: h, sun: h }; }
+                addLog('info', `Магазин "${name}" обновлён`);
+            } else {
+                state.stores.push({ id: Date.now(), name, address, hours: { mon: h, tue: h, wed: h, thu: h, fri: h, sat: h, sun: h } });
+                addLog('success', `Магазин "${name}" добавлен`);
+            }
+            save(); closeStoreModal(); renderStores(); toast('✅ Магазин сохранён!');
+        }
+
+        function deleteStore(id) {
+            if (!confirm('Удалить магазин?')) return;
+            const s = state.stores.find(x => x.id === id);
+            state.stores = state.stores.filter(x => x.id !== id);
+            addLog('warn', `Магазин "${s?.name}" удалён`);
+            save(); renderStores(); toast('🗑 Магазин удалён');
+        }
+
+        // ─── PRODUCTS ────────────────────────────────────────
+        if (!state.products) {
+            state.products = [
+                { id: 1, name: 'Молоко KOSKO 3.2%', category: 'Молочные', price: 12000, status: 'active' },
+                { id: 2, name: 'Хлеб белый', category: 'Хлеб', price: 5500, status: 'active' },
+                { id: 3, name: 'Масло сливочное 82%', category: 'Молочные', price: 24000, status: 'active' },
+                { id: 4, name: 'Сок яблочный 1л', category: 'Напитки', price: 8500, status: 'hidden' },
+                { id: 5, name: 'Рис узб. 1кг', category: 'Крупы', price: 15000, status: 'active' },
+            ];
+            save();
+        }
+
+        function renderProducts() {
+            document.getElementById('products-table').innerHTML = state.products.map(p => `<tr>
+                <td><b>${p.name}</b></td>
+                <td>${p.category}</td>
+                <td><span class="price-tag">${p.price.toLocaleString()}</span></td>
+                <td><span class="status-badge ${p.status === 'active' ? 'active' : 'ended'}">${p.status === 'active' ? '✅ Активный' : '⏸ Скрыт'}</span></td>
+                <td><button class="btn btn-ghost btn-sm" onclick="editProduct(${p.id})">✏️</button> <button class="btn btn-danger btn-sm" onclick="deleteProduct(${p.id})">🗑</button></td>
+            </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted)">Нет товаров</td></tr>';
+        }
+
+        function openProductModal(id) {
+            document.getElementById('edit-store-id').value = '';
+            const n = id ? 'Редактировать товар' : 'Добавить товар';
+            const p = id ? state.products.find(x => x.id === id) : null;
+            document.getElementById('store-modal-title').textContent = n;
+            document.getElementById('store-name').value = p ? p.name : '';
+            document.getElementById('store-address').value = p ? p.category : '';
+            document.getElementById('store-open').value = p ? String(p.price) : '';
+            document.getElementById('store-close').value = p ? p.status : 'active';
+            document.getElementById('edit-store-id').value = id || '';
+            document.getElementById('store-modal').classList.add('open');
+            // Rename labels
+            document.querySelector('#store-modal label[for="store-name"],#store-modal .form-group:nth-child(2) label').textContent = 'Название товара';
+            document.querySelectorAll('#store-modal .form-group')[1].querySelector('label').textContent = 'Категория';
+            document.querySelectorAll('#store-modal .form-group')[2].querySelector('label').textContent = 'Цена (сум)';
+            document.querySelectorAll('#store-modal .form-group')[3].querySelector('label').textContent = 'Статус';
+            // Override save
+            document.querySelector('#store-modal .btn-primary').setAttribute('onclick', 'saveProduct()');
+        }
+
+        function saveProduct() {
+            const name = document.getElementById('store-name').value.trim();
+            const cat = document.getElementById('store-address').value.trim();
+            if (!name) { toast('⚠️ Введите название товара'); return; }
+            const price = parseInt(document.getElementById('store-open').value) || 0;
+            const status = document.getElementById('store-close').value || 'active';
+            const editId = document.getElementById('edit-store-id').value;
+            if (editId) {
+                const p = state.products.find(x => x.id == editId);
+                if (p) { p.name = name; p.category = cat; p.price = price; p.status = status; }
+                addLog('info', `Товар "${name}" обновлён`);
+            } else {
+                state.products.push({ id: Date.now(), name, category: cat, price, status });
+                addLog('success', `Товар "${name}" добавлен`);
+            }
+            save(); closeStoreModal(); renderProducts(); renderDashboard(); toast('✅ Товар сохранён!');
+            // Restore original store modal labels
+            restoreStoreModalLabels();
+        }
+
+        function restoreStoreModalLabels() {
+            const groups = document.querySelectorAll('#store-modal .form-group');
+            if (groups[0]) groups[0].querySelector('label').textContent = 'Название магазина';
+            if (groups[1]) groups[1].querySelector('label').textContent = 'Адрес';
+            if (groups[2]) groups[2].querySelector('label').textContent = 'Время открытия';
+            if (groups[3]) groups[3].querySelector('label').textContent = 'Время закрытия';
+            document.querySelector('#store-modal .btn-primary').setAttribute('onclick', 'saveStore()');
+        }
+
+        function editProduct(id) { openProductModal(id); }
+
+        function deleteProduct(id) {
+            if (!confirm('Удалить товар?')) return;
+            const p = state.products.find(x => x.id === id);
+            state.products = state.products.filter(x => x.id !== id);
+            addLog('warn', `Товар "${p?.name}" удалён`);
+            save(); renderProducts(); toast('🗑 Товар удалён');
+        }
+
+        // ─── ORDERS ──────────────────────────────────────────
+        if (!state.orderSettings) {
+            state.orderSettings = { orders: true, delivery: true, pickup: true, schedule: false, delStart: '09:00', delEnd: '22:00', delMin: 100000 };
+            save();
+        }
+
+        function toggleSwitch(el) {
+            el.classList.toggle('on');
+            saveOrders();
+        }
+
+        function loadOrders() {
+            const s = state.orderSettings;
+            document.getElementById('tgl-orders').classList.toggle('on', s.orders);
+            document.getElementById('tgl-delivery').classList.toggle('on', s.delivery);
+            document.getElementById('tgl-pickup').classList.toggle('on', s.pickup);
+            document.getElementById('tgl-sched').classList.toggle('on', s.schedule);
+            document.getElementById('del-start').value = s.delStart || '09:00';
+            document.getElementById('del-end').value = s.delEnd || '22:00';
+            document.getElementById('del-min').value = s.delMin || 100000;
+        }
+
+        function saveOrders() {
+            state.orderSettings = {
+                orders: document.getElementById('tgl-orders').classList.contains('on'),
+                delivery: document.getElementById('tgl-delivery').classList.contains('on'),
+                pickup: document.getElementById('tgl-pickup').classList.contains('on'),
+                schedule: document.getElementById('tgl-sched').classList.contains('on'),
+                delStart: document.getElementById('del-start').value,
+                delEnd: document.getElementById('del-end').value,
+                delMin: parseInt(document.getElementById('del-min').value) || 100000,
+            };
+            save(); toast('✅ Настройки сохранены!');
+            addLog('info', 'Настройки заказов обновлены');
+        }
+
+        // ─── REFERRALS ───────────────────────────────────────
+        if (!state.referrals) {
+            state.referrals = { inviter: 500, invitee: 200 };
+            save();
+        }
+
+        function renderReferrals() {
+            document.getElementById('ref-inviter').value = state.referrals.inviter;
+            document.getElementById('ref-invitee').value = state.referrals.invitee;
+            // Simulated stats
+            const total = state.users.filter(u => u.active).length;
+            const bonus = total * (state.referrals.inviter + state.referrals.invitee);
+            const conv = state.users.length ? Math.round(total / state.users.length * 100) : 0;
+            document.getElementById('ref-total').textContent = total;
+            document.getElementById('ref-bonus').textContent = bonus.toLocaleString();
+            document.getElementById('ref-conv').textContent = conv + '%';
+            // Top referrers table
+            document.getElementById('ref-table').innerHTML = state.users.filter(u => u.active).slice(0, 5).map((u, i) => {
+                const invited = Math.max(1, 5 - i);
+                return `<tr><td>${u.name}</td><td>${invited}</td><td>${(invited * state.referrals.inviter).toLocaleString()} баллов</td></tr>`;
+            }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted)">Нет данных</td></tr>';
+        }
+
+        function saveReferrals() {
+            state.referrals.inviter = parseInt(document.getElementById('ref-inviter').value) || 500;
+            state.referrals.invitee = parseInt(document.getElementById('ref-invitee').value) || 200;
+            save(); renderReferrals(); toast('✅ Настройки рефералов сохранены!');
+            addLog('info', 'Реферальная программа обновлена');
+        }
+
+        // ─── PROMO CODES ─────────────────────────────────────
+        if (!state.promoCodes) {
+            state.promoCodes = [
+                { id: 1, code: 'KOSKO10', discount: '10%', used: 24, maxUse: 100, expiry: '2026-04-01', status: 'active' },
+                { id: 2, code: 'WELCOME', discount: '15%', used: 156, maxUse: 500, expiry: '2026-06-01', status: 'active' },
+                { id: 3, code: 'SPRING25', discount: '25%', used: 50, maxUse: 50, expiry: '2026-03-15', status: 'expired' },
+            ];
+            save();
+        }
+
+        function renderCodes() {
+            document.getElementById('codes-table').innerHTML = state.promoCodes.map(c => `<tr>
+                <td><span class="code-tag">${c.code}</span></td>
+                <td><b>${c.discount}</b></td>
+                <td>${c.used}/${c.maxUse}</td>
+                <td>${c.expiry}</td>
+                <td><span class="status-badge ${c.status === 'active' ? 'active' : 'ended'}">${c.status === 'active' ? '✅ Активный' : '⏸ Истёк'}</span></td>
+                <td><button class="btn btn-danger btn-sm" onclick="deleteCode(${c.id})">🗑</button></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--muted)">Нет промокодов</td></tr>';
+        }
+
+        function openCodeModal() {
+            document.getElementById('edit-store-id').value = '';
+            document.getElementById('store-modal-title').textContent = 'Создать промокод';
+            const code = 'KOSKO' + Math.random().toString(36).substring(2, 6).toUpperCase();
+            document.getElementById('store-name').value = code;
+            document.getElementById('store-address').value = '10%';
+            document.getElementById('store-open').value = '100';
+            document.getElementById('store-close').value = '2026-06-30';
+            // Rename labels
+            const groups = document.querySelectorAll('#store-modal .form-group');
+            if (groups[0]) groups[0].querySelector('label').textContent = 'Код';
+            if (groups[1]) groups[1].querySelector('label').textContent = 'Скидка';
+            if (groups[2]) groups[2].querySelector('label').textContent = 'Макс. использований';
+            if (groups[3]) groups[3].querySelector('label').textContent = 'Срок действия';
+            document.querySelector('#store-modal .btn-primary').setAttribute('onclick', 'saveCode()');
+            document.getElementById('store-modal').classList.add('open');
+        }
+
+        function saveCode() {
+            const code = document.getElementById('store-name').value.trim().toUpperCase();
+            const discount = document.getElementById('store-address').value.trim();
+            if (!code) { toast('⚠️ Введите код'); return; }
+            const maxUse = parseInt(document.getElementById('store-open').value) || 100;
+            const expiry = document.getElementById('store-close').value || '2026-06-30';
+            state.promoCodes.push({ id: Date.now(), code, discount, used: 0, maxUse, expiry, status: 'active' });
+            addLog('success', `Промокод "${code}" создан`);
+            save(); closeStoreModal(); renderCodes(); toast('✅ Промокод создан!');
+            restoreStoreModalLabels();
+        }
+
+        function deleteCode(id) {
+            if (!confirm('Удалить промокод?')) return;
+            const c = state.promoCodes.find(x => x.id === id);
+            state.promoCodes = state.promoCodes.filter(x => x.id !== id);
+            addLog('warn', `Промокод "${c?.code}" удалён`);
+            save(); renderCodes(); toast('🗑 Промокод удалён');
+        }
+
+        // ─── CHAT (Cloud API) ──────────────────────────────
+        const CHAT_API = 'https://kosko-auth-server.onrender.com';
+        let cloudMessages = [];
+        let lastChatTimestamp = 0;
+
+        // Load all messages from cloud
+        async function loadCloudChat() {
+            try {
+                const res = await fetch(`${CHAT_API}/api/chat/messages`);
+                const data = await res.json();
+                if (data.messages) {
+                    cloudMessages = data.messages;
+                    if (cloudMessages.length > 0) {
+                        lastChatTimestamp = cloudMessages[cloudMessages.length - 1].timestamp || 0;
+                    }
+                    renderChat();
+                }
+            } catch (err) {
+                console.log('Chat load error:', err);
+            }
+        }
+
+        // Poll for new messages every 3 seconds
+        async function pollCloudChat() {
+            try {
+                const res = await fetch(`${CHAT_API}/api/chat/messages?since=${lastChatTimestamp}`);
+                const data = await res.json();
+                if (data.messages && data.messages.length > 0) {
+                    const existingIds = new Set(cloudMessages.map(m => m.id));
+                    const newMsgs = data.messages.filter(m => !existingIds.has(m.id));
+                    if (newMsgs.length > 0) {
+                        cloudMessages = [...cloudMessages, ...newMsgs];
+                        lastChatTimestamp = data.messages[data.messages.length - 1].timestamp || lastChatTimestamp;
+                        renderChat();
+                        // Notify admin of new user messages
+                        newMsgs.forEach(m => {
+                            if (m.from === 'user') {
+                                addLog('info', `💬 Новое сообщение: "${m.text}"`);
+                            }
+                        });
+                    }
+                }
+            } catch (err) { /* silent */ }
+        }
+
+        setInterval(pollCloudChat, 3000);
+
+        function renderChat() {
+            // Show user list (group by phone)
+            const users = {};
+            cloudMessages.forEach(m => {
+                if (m.from === 'user') {
+                    if (!users[m.phone]) users[m.phone] = { name: m.phone, lastMsg: m.text };
+                    else users[m.phone].lastMsg = m.text;
+                }
+            });
+            const userList = Object.entries(users);
+            const chatUsersEl = document.getElementById('chat-users');
+            if (chatUsersEl) {
+                if (userList.length === 0) {
+                    chatUsersEl.innerHTML = '<div style="padding:16px;color:rgba(255,255,255,0.4);font-size:12px">Нет сообщений</div>';
+                } else {
+                    chatUsersEl.innerHTML = userList.map(([phone, u]) =>
+                        `<div class="chat-user active"><div class="chat-user-dot"></div>${phone}</div>`
+                    ).join('');
+                }
+            }
+            renderMessages();
+        }
+
+        function renderMessages() {
+            const el = document.getElementById('chat-messages');
+            if (!el) return;
+            if (cloudMessages.length === 0) {
+                el.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3)">💬 Ожидание сообщений из приложения...</div>';
+                return;
+            }
+            el.innerHTML = cloudMessages.map(m =>
+                `<div class="chat-msg ${m.from === 'support' ? 'admin' : m.from}">${m.text}<div style="font-size:9px;color:rgba(255,255,255,0.5);margin-top:4px">${m.time}</div></div>`
+            ).join('');
+            el.scrollTop = el.scrollHeight;
+        }
+
+        async function sendChat() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+
+            try {
+                const res = await fetch(`${CHAT_API}/api/chat/admin/reply`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text }),
+                });
+                const data = await res.json();
+                if (data.ok && data.message) {
+                    cloudMessages.push(data.message);
+                    lastChatTimestamp = data.message.timestamp;
+                    renderMessages();
+                    addLog('info', `Ответ в чат: "${text}"`);
+                }
+            } catch (err) {
+                // Fallback — add locally
+                const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                cloudMessages.push({ id: Date.now().toString(), from: 'support', text, time, timestamp: Date.now() });
+                renderMessages();
+            }
+        }
+
+        // Initial load
+        loadCloudChat();
+    </script>
+</body>
+
+</html>

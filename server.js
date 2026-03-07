@@ -4,10 +4,15 @@
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
+const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Serve admin panel at /admin
+app.use('/admin', express.static(path.join(__dirname, 'public')));
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
 // ═══════════════════════════════════════════════════
 const BOT_TOKEN = process.env.BOT_TOKEN || '8578668373:AAFxAxJplTY6YE6ej-BUuImhmIrs8-_2AT8';
