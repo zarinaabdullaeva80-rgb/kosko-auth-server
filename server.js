@@ -195,9 +195,32 @@ app.post('/api/chat/admin/reply', (req, res) => {
     res.json({ ok: true, message: msg });
 });
 
+// ─── SERVER REGISTRATION (for 1C discovery) ─────────
+let registeredServer = null;
+
+// 1C server registers itself with cloud
+app.post('/api/server/register', (req, res) => {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL required' });
+    registeredServer = { url, timestamp: Date.now() };
+    console.log(`🔗 1C server registered: ${url}`);
+    res.json({ ok: true, registered: registeredServer });
+});
+
+// Mobile app gets registered 1C server
+app.get('/api/server/registered', (req, res) => {
+    if (!registeredServer) return res.status(404).json({ error: 'No server registered' });
+    // Expire after 24 hours
+    if (Date.now() - registeredServer.timestamp > 86400000) {
+        registeredServer = null;
+        return res.status(404).json({ error: 'Registration expired' });
+    }
+    res.json(registeredServer);
+});
+
 // ─── Health check ────────────────────────────────────
-app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
-app.get('/', (req, res) => res.json({ service: 'KOSKO Auth + Chat', status: 'running' }));
+app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime(), chatMessages: chatMessages.length, registeredServer: !!registeredServer }));
+app.get('/', (req, res) => res.json({ service: 'KOSKO Auth + Chat + Discovery', status: 'running' }));
 
 // ─── Start ───────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
