@@ -439,9 +439,103 @@ app.post('/api/push/send', async (req, res) => {
     }
 });
 
+// ─── SERVER REGISTRY ─────────────────────────────────
+// Stores all servers discovered by mobile apps
+// Admin reviews them and approves which ones to sync
+
+const serverRegistry = new Map(); // id → server record
+
+app.post('/api/registry/report', (req, res) => {
+    // Mobile app reports a newly discovered server
+    const { baseUrl, name, type, networkType, storeId, storeName, scanDuration, scannedIPs, deviceId, appVersion } = req.body;
+    if (!baseUrl) return res.status(400).json({ error: 'baseUrl required' });
+
+    const id = crypto.createHash('md5').update(baseUrl).digest('hex').slice(0, 8);
+    const existing = serverRegistry.get(id);
+
+    const record = {
+        id,
+        baseUrl,
+        name: name || `Сервер (${new URL(baseUrl).hostname})`,
+        type: type || 'local',         // local | cloud | manual
+        networkType: networkType || 'ip',
+        storeId: storeId || null,
+        storeName: storeName || null,
+        status: existing?.status || 'new',  // new | approved | rejected | syncing
+        firstSeen: existing?.firstSeen || Date.now(),
+        lastSeen: Date.now(),
+        seenCount: (existing?.seenCount || 0) + 1,
+        scanDuration: scanDuration || null,
+        scannedIPs: scannedIPs || null,
+        deviceId: deviceId || 'unknown',
+        appVersion: appVersion || '2.0',
+        syncEnabled: existing?.syncEnabled || false,
+        notes: existing?.notes || '',
+    };
+
+    serverRegistry.set(id, record);
+    console.log(`📡 Server reported: ${baseUrl} [${record.status}] (seen ${record.seenCount}x)`);
+    res.json({ ok: true, id, status: record.status, syncEnabled: record.syncEnabled });
+});
+
+// Get all registered servers (admin view)
+app.get('/api/registry/servers', (req, res) => {
+    const list = Array.from(serverRegistry.values())
+        .sort((a, b) => b.lastSeen - a.lastSeen);
+    res.json({ servers: list, total: list.length });
+});
+
+// Get single server
+app.get('/api/registry/servers/:id', (req, res) => {
+    const server = serverRegistry.get(req.params.id);
+    if (!server) return res.status(404).json({ error: 'Not found' });
+    res.json(server);
+});
+
+// Approve server for sync (admin action)
+app.post('/api/registry/servers/:id/approve', (req, res) => {
+    const server = serverRegistry.get(req.params.id);
+    if (!server) return res.status(404).json({ error: 'Not found' });
+    server.status = 'approved';
+    server.syncEnabled = true;
+    server.notes = req.body.notes || server.notes;
+    console.log(`✅ Server approved for sync: ${server.baseUrl}`);
+    res.json({ ok: true, server });
+});
+
+// Reject server (admin action)
+app.post('/api/registry/servers/:id/reject', (req, res) => {
+    const server = serverRegistry.get(req.params.id);
+    if (!server) return res.status(404).json({ error: 'Not found' });
+    server.status = 'rejected';
+    server.syncEnabled = false;
+    res.json({ ok: true, server });
+});
+
+// Update server notes
+app.put('/api/registry/servers/:id', (req, res) => {
+    const server = serverRegistry.get(req.params.id);
+    if (!server) return res.status(404).json({ error: 'Not found' });
+    Object.assign(server, req.body);
+    res.json({ ok: true, server });
+});
+
+// Mobile app asks: which servers are approved for sync?
+app.get('/api/registry/approved', (req, res) => {
+    const approved = Array.from(serverRegistry.values()).filter(s => s.syncEnabled);
+    res.json({ servers: approved });
+});
+
 // ─── Health check ────────────────────────────────────
-app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime(), chatMessages: chatMessages.length, loyaltyCards: loyaltyCards.size, pushTokens: pushTokens.length }));
-app.get('/', (req, res) => res.json({ service: 'KOSKO Full Platform', version: '2.0', status: 'running' }));
+app.get('/health', (req, res) => res.json({
+    status: 'ok',
+    uptime: Math.round(process.uptime()),
+    chatMessages: chatMessages.length,
+    loyaltyCards: loyaltyCards.size,
+    pushTokens: pushTokens.length,
+    registeredServers: serverRegistry.size,
+}));
+app.get('/', (req, res) => res.json({ service: 'KOSKO Full Platform', version: '2.1', status: 'running' }));
 
 // ─── Start ───────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
