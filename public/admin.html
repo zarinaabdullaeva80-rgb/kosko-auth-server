@@ -2098,7 +2098,7 @@
         function now() { return new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
 
         // ─── NAVIGATION ───────────────────────────────────
-        const titles = { dashboard: 'Dashboard', promotions: 'Управление акциями', push: 'Push-уведомления', loyalty: 'Бонусная программа', users: 'Пользователи', export: 'Экспорт данных', analytics: 'Аналитика', schedule: 'Расписание магазинов', products: 'Товары и цены', orders: 'Заказы и доставка', referrals: 'Реферальная программа', codes: 'Промокоды', chat: 'Чат поддержки' };
+        const titles = { dashboard: 'Dashboard', promotions: 'Управление акциями', push: 'Push-уведомления', loyalty: 'Бонусная программа', users: 'Пользователи', export: 'Экспорт данных', analytics: 'Аналитика', schedule: 'Расписание магазинов', products: 'Товары и цены', orders: 'Заказы и доставка', referrals: 'Реферальная программа', codes: 'Промокоды', chat: 'Чат поддержки', servers: 'Реестр серверов', catalog: 'Каталог товаров', settings: 'Настройки магазина' };
         function goTo(id, el) {
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -2517,32 +2517,59 @@
 
         function toggleSwitch(el) {
             el.classList.toggle('on');
-            saveOrders();
+            // If it's the delivery toggle, also update the API
+            if (el.id === 'tgl-delivery') {
+                fetch('/api/settings/delivery/toggle', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(d => {
+                        showToast(d.deliveryEnabled ? '🚚 Доставка включена' : '🚫 Доставка выключена');
+                        addLog('info', `Доставка: ${d.deliveryEnabled ? 'вкл' : 'выкл'}`);
+                    }).catch(() => {});
+            }
         }
 
-        function loadOrders() {
-            const s = state.orderSettings;
-            document.getElementById('tgl-orders').classList.toggle('on', s.orders);
-            document.getElementById('tgl-delivery').classList.toggle('on', s.delivery);
-            document.getElementById('tgl-pickup').classList.toggle('on', s.pickup);
-            document.getElementById('tgl-sched').classList.toggle('on', s.schedule);
-            document.getElementById('del-start').value = s.delStart || '09:00';
-            document.getElementById('del-end').value = s.delEnd || '22:00';
-            document.getElementById('del-min').value = s.delMin || 100000;
+        async function loadOrders() {
+            // Load from API
+            try {
+                const res = await fetch('/api/settings');
+                const s = await res.json();
+                document.getElementById('tgl-delivery').classList.toggle('on', s.deliveryEnabled);
+                document.getElementById('del-start').value = s.workingHours?.from || '09:00';
+                document.getElementById('del-end').value = s.workingHours?.to || '22:00';
+                document.getElementById('del-min').value = s.freeDeliveryThreshold || 100000;
+            } catch(e) {}
+            // Local toggles
+            const s = state.orderSettings || {};
+            document.getElementById('tgl-orders').classList.toggle('on', s.orders !== false);
+            document.getElementById('tgl-pickup').classList.toggle('on', s.pickup !== false);
+            document.getElementById('tgl-sched').classList.toggle('on', !!s.schedule);
         }
 
-        function saveOrders() {
+        async function saveOrders() {
+            // Save to API
+            const body = {
+                deliveryEnabled: document.getElementById('tgl-delivery').classList.contains('on'),
+                freeDeliveryThreshold: parseInt(document.getElementById('del-min').value) || 100000,
+                deliveryFee: 10000,
+                workingHours: {
+                    from: document.getElementById('del-start').value,
+                    to: document.getElementById('del-end').value,
+                }
+            };
+            await fetch('/api/settings', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+            // Also save local toggles
             state.orderSettings = {
                 orders: document.getElementById('tgl-orders').classList.contains('on'),
-                delivery: document.getElementById('tgl-delivery').classList.contains('on'),
+                delivery: body.deliveryEnabled,
                 pickup: document.getElementById('tgl-pickup').classList.contains('on'),
                 schedule: document.getElementById('tgl-sched').classList.contains('on'),
-                delStart: document.getElementById('del-start').value,
-                delEnd: document.getElementById('del-end').value,
-                delMin: parseInt(document.getElementById('del-min').value) || 100000,
+                delStart: body.workingHours.from,
+                delEnd: body.workingHours.to,
+                delMin: body.freeDeliveryThreshold,
             };
-            save(); toast('✅ Настройки сохранены!');
-            addLog('info', 'Настройки заказов обновлены');
+            save();
+            showToast('✅ Настройки заказов сохранены — синхронизируются с приложением');
+            addLog('info', 'Настройки заказов обновлены (API + локально)');
         }
 
         // ─── REFERRALS ───────────────────────────────────────
@@ -2681,13 +2708,16 @@
 
         setInterval(pollCloudChat, 3000);
 
+        let replyingTo = null; // { id, text, from }
+
         function renderChat() {
-            // Show user list (group by phone)
+            // Show user list (group by phone) — FULL phone numbers
             const users = {};
             cloudMessages.forEach(m => {
                 if (m.from === 'user') {
-                    if (!users[m.phone]) users[m.phone] = { name: m.phone, lastMsg: m.text };
-                    else users[m.phone].lastMsg = m.text;
+                    const ph = m.phone || 'Неизвестный';
+                    if (!users[ph]) users[ph] = { phone: ph, lastMsg: m.text, count: 1 };
+                    else { users[ph].lastMsg = m.text; users[ph].count++; }
                 }
             });
             const userList = Object.entries(users);
@@ -2697,7 +2727,14 @@
                     chatUsersEl.innerHTML = '<div style="padding:16px;color:rgba(255,255,255,0.4);font-size:12px">Нет сообщений</div>';
                 } else {
                     chatUsersEl.innerHTML = userList.map(([phone, u]) =>
-                        `<div class="chat-user active"><div class="chat-user-dot"></div>${phone}</div>`
+                        `<div class="chat-user active" title="${phone}">
+                            <div class="chat-user-dot"></div>
+                            <div style="overflow:hidden;flex:1">
+                                <div style="font-weight:600;font-size:12px;color:var(--text)">${phone}</div>
+                                <div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.lastMsg}</div>
+                            </div>
+                            <span style="font-size:10px;color:var(--violet);font-weight:700">${u.count}</span>
+                        </div>`
                     ).join('');
                 }
             }
@@ -2711,10 +2748,44 @@
                 el.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3)">💬 Ожидание сообщений из приложения...</div>';
                 return;
             }
-            el.innerHTML = cloudMessages.map(m =>
-                `<div class="chat-msg ${m.from === 'support' ? 'admin' : m.from}">${m.text}<div style="font-size:9px;color:rgba(255,255,255,0.5);margin-top:4px">${m.time}</div></div>`
-            ).join('');
+            el.innerHTML = cloudMessages.map(m => {
+                const isAdmin = m.from === 'support';
+                const replyBlock = m.replyTo ? `<div style="background:rgba(108,99,255,0.15);border-left:3px solid var(--purple);padding:4px 8px;border-radius:6px;margin-bottom:4px;font-size:10px;color:var(--muted)">↩ ${m.replyTo}</div>` : '';
+                return `<div class="chat-msg ${isAdmin ? 'admin' : m.from}" onclick="setReply('${m.id}','${m.text.replace(/'/g,"\\'")}','${m.from}')">
+                    ${replyBlock}
+                    ${m.text}
+                    <div style="font-size:9px;color:rgba(255,255,255,0.5);margin-top:4px;display:flex;justify-content:space-between">
+                        <span>${m.phone || ''}</span>
+                        <span>${m.time}</span>
+                    </div>
+                </div>`;
+            }).join('');
             el.scrollTop = el.scrollHeight;
+        }
+
+        function setReply(id, text, from) {
+            replyingTo = { id, text, from };
+            const input = document.getElementById('chat-input');
+            input.placeholder = `↩ Ответ на: "${text.slice(0,40)}..."`;
+            input.focus();
+            // Show reply indicator
+            let indicator = document.getElementById('reply-indicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.id = 'reply-indicator';
+                indicator.style.cssText = 'padding:6px 12px;font-size:11px;color:var(--violet);background:rgba(108,99,255,0.1);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between';
+                input.parentElement.parentElement.insertBefore(indicator, input.parentElement);
+            }
+            indicator.innerHTML = `<span>↩ Ответ на: "${text.slice(0,50)}"</span><span style="cursor:pointer;font-size:14px" onclick="cancelReply()">✕</span>`;
+            indicator.style.display = 'flex';
+        }
+
+        function cancelReply() {
+            replyingTo = null;
+            const input = document.getElementById('chat-input');
+            input.placeholder = 'Напишите ответ...';
+            const indicator = document.getElementById('reply-indicator');
+            if (indicator) indicator.style.display = 'none';
         }
 
         async function sendChat() {
@@ -2723,14 +2794,18 @@
             if (!text) return;
             input.value = '';
 
+            const replyText = replyingTo ? replyingTo.text : null;
+            cancelReply();
+
             try {
                 const res = await fetch(`${CHAT_API}/api/chat/admin/reply`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text }),
+                    body: JSON.stringify({ text, replyTo: replyText }),
                 });
                 const data = await res.json();
                 if (data.ok && data.message) {
+                    data.message.replyTo = replyText;
                     cloudMessages.push(data.message);
                     lastChatTimestamp = data.message.timestamp;
                     renderMessages();
@@ -2739,8 +2814,9 @@
             } catch (err) {
                 // Fallback — add locally
                 const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-                cloudMessages.push({ id: Date.now().toString(), from: 'support', text, time, timestamp: Date.now() });
+                cloudMessages.push({ id: Date.now().toString(), from: 'support', text, time, timestamp: Date.now(), replyTo: replyText });
                 renderMessages();
+
             }
         }
 
