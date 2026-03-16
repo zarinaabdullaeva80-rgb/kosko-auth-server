@@ -1823,7 +1823,32 @@
             <!-- ═══ SERVERS REGISTRY ═══ -->
             <section class="section" id="sec-servers">
                 <div class="section-heading">🖥️ Реестр серверов</div>
-                <div class="section-desc">Серверы, найденные мобильным приложением в магазинах. Одобрите или отклоните каждый.</div>
+                <div class="section-desc">Серверы обнаруживаются автоматически при сканировании WiFi сети магазина. Одобрите нужные серверы.</div>
+
+                <!-- Network Scanner -->
+                <div class="card-box" style="margin-bottom:16px">
+                    <div class="card-box-header">
+                        <span class="card-box-title">📡 Сканер сети</span>
+                        <div style="display:flex;gap:8px">
+                            <button class="btn btn-primary btn-sm" onclick="scanNetwork()" id="scan-btn">🔍 Сканировать WiFi</button>
+                        </div>
+                    </div>
+                    <div style="padding:16px">
+                        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+                            <input class="search-input" id="manual-ip" placeholder="Или введите IP вручную: 192.168.1.100:8080" style="flex:1">
+                            <button class="btn btn-ghost btn-sm" onclick="addManualServer()">+ Добавить</button>
+                        </div>
+                        <div id="scan-progress" style="display:none">
+                            <div style="background:var(--bg-input);border-radius:8px;height:6px;overflow:hidden;margin-bottom:8px">
+                                <div id="scan-bar" style="height:100%;background:var(--violet);width:0%;transition:width 0.3s"></div>
+                            </div>
+                            <div id="scan-status" style="font-size:11px;color:var(--muted)">Сканирование...</div>
+                        </div>
+                        <div id="scan-results" style="font-size:11px;color:var(--muted)"></div>
+                    </div>
+                </div>
+
+                <!-- Servers table -->
                 <div class="card-box">
                     <div class="card-box-header">
                         <span class="card-box-title">Все обнаруженные серверы</span>
@@ -2941,6 +2966,117 @@
             await fetch(`/api/registry/servers/${id}/reject`, { method: 'POST' });
             showToast('❌ Сервер отклонён');
             loadServers();
+        }
+
+        // ─── NETWORK SCANNER ─────────────────────────────
+        const SCAN_PORTS = [8080, 80, 3030, 8081, 5000, 443];
+        const SCAN_SUBNETS = ['192.168.0', '192.168.1', '192.168.100', '10.0.0', '10.0.1'];
+        let scanRunning = false;
+
+        async function probeHost(ip, port) {
+            const url = `http://${ip}:${port}`;
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 1500);
+                const res = await fetch(url, { mode: 'no-cors', signal: controller.signal });
+                clearTimeout(timeout);
+                return { ip, port, url, reachable: true };
+            } catch {
+                return null;
+            }
+        }
+
+        async function scanNetwork() {
+            if (scanRunning) return;
+            scanRunning = true;
+            const btn = document.getElementById('scan-btn');
+            const progress = document.getElementById('scan-progress');
+            const bar = document.getElementById('scan-bar');
+            const status = document.getElementById('scan-status');
+            const results = document.getElementById('scan-results');
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Сканирование...';
+            progress.style.display = 'block';
+            results.innerHTML = '';
+
+            const found = [];
+            const totalIPs = SCAN_SUBNETS.length * 254;
+            let checked = 0;
+
+            // Scan each subnet
+            for (const subnet of SCAN_SUBNETS) {
+                // Batch of 20 simultaneous probes for speed
+                for (let start = 1; start <= 254; start += 20) {
+                    const batch = [];
+                    for (let i = start; i < Math.min(start + 20, 255); i++) {
+                        const ip = `${subnet}.${i}`;
+                        for (const port of SCAN_PORTS) {
+                            batch.push(probeHost(ip, port));
+                        }
+                    }
+                    const results_batch = await Promise.all(batch);
+                    results_batch.filter(r => r).forEach(r => {
+                        found.push(r);
+                        results.innerHTML += `<div style="color:var(--green);margin-top:4px">✅ Найден: ${r.url}</div>`;
+                    });
+                    checked += 20;
+                    bar.style.width = Math.min(100, Math.round(checked / 254 * 100 / SCAN_SUBNETS.length * (SCAN_SUBNETS.indexOf(subnet) + 1))) + '%';
+                    status.textContent = `Сканируется ${subnet}.* (${checked}/${254})...`;
+                }
+            }
+
+            bar.style.width = '100%';
+            status.textContent = `Готово! Найдено ${found.length} серверов.`;
+
+            // Report found servers to registry
+            for (const srv of found) {
+                try {
+                    await fetch('/api/registry/report', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            baseUrl: srv.url,
+                            name: `Server ${srv.ip}:${srv.port}`,
+                            networkType: 'WiFi (admin scan)',
+                            type: srv.port === 8080 ? '1C/HTTP' : srv.port === 3030 ? 'Frontol' : 'Unknown',
+                        })
+                    });
+                } catch {}
+            }
+
+            if (found.length > 0) {
+                showToast(`📡 Найдено ${found.length} серверов! Обновляю список...`);
+                loadServers();
+            } else {
+                results.innerHTML = '<div style="color:var(--muted);margin-top:4px">Серверы не найдены в локальной сети. Попробуйте ввести IP вручную.</div>';
+            }
+
+            btn.disabled = false;
+            btn.textContent = '🔍 Сканировать WiFi';
+            scanRunning = false;
+        }
+
+        async function addManualServer() {
+            const input = document.getElementById('manual-ip');
+            const ip = input.value.trim();
+            if (!ip) return showToast('⚠️ Введите IP-адрес');
+            const url = ip.startsWith('http') ? ip : `http://${ip}`;
+            try {
+                await fetch('/api/registry/report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        baseUrl: url,
+                        name: `Manual: ${ip}`,
+                        networkType: 'Manual',
+                        type: 'Custom',
+                    })
+                });
+                showToast(`✅ Сервер ${ip} добавлен`);
+                input.value = '';
+                loadServers();
+            } catch (e) { showToast('❌ Ошибка: ' + e.message); }
         }
 
         // ─── PRODUCTS CATALOG ─────────────────────────────
