@@ -600,6 +600,52 @@ app.delete('/api/promotions/:id', (req, res) => {
     res.json({ ok: true });
 });
 
+// ─── ORDERS (delivery tracking) ──────────────────────
+const orders = new Map(); // id → order
+let orderIdCounter = 1;
+
+// Mobile app creates order
+app.post('/api/orders', (req, res) => {
+    const { items, delivery, address, phone, payMethod, comment, promoCode, total, deliveryFee } = req.body;
+    const id = 'ord_' + (orderIdCounter++);
+    const order = {
+        id,
+        items: items || [],
+        delivery: delivery || 'pickup',
+        address: address || '',
+        phone: phone || '',
+        payMethod: payMethod || 'cash',
+        comment: comment || '',
+        promoCode: promoCode || '',
+        total: total || 0,
+        deliveryFee: deliveryFee || 0,
+        status: 'new', // new → confirmed → preparing → delivering → delivered / cancelled
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+    };
+    orders.set(id, order);
+    console.log(`📦 New order ${id}: ${order.delivery}, ${order.total} сўм, ${order.items.length} items`);
+    res.json({ ok: true, order });
+});
+
+// Admin gets all orders
+app.get('/api/orders', (req, res) => {
+    const list = Array.from(orders.values()).sort((a, b) => b.createdAt - a.createdAt);
+    const { status } = req.query;
+    const filtered = status ? list.filter(o => o.status === status) : list;
+    res.json({ orders: filtered, total: filtered.length });
+});
+
+// Admin updates order status
+app.patch('/api/orders/:id/status', (req, res) => {
+    const order = orders.get(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    order.status = req.body.status || order.status;
+    order.updatedAt = Date.now();
+    console.log(`📦 Order ${order.id} → ${order.status}`);
+    res.json({ ok: true, order });
+});
+
 // ─── SERVER REGISTRY ─────────────────────────────────
 // Stores all servers discovered by mobile apps
 // Admin reviews them and approves which ones to sync

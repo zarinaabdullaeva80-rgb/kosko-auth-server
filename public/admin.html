@@ -1700,7 +1700,34 @@
                     <div class="form-actions" style="margin-top:14px"><button class="btn btn-primary"
                             onclick="saveOrders()">💾 Сохранить</button></div>
                 </div>
+                <div class="divider"></div>
+                <!-- Orders List -->
+                <div class="card-box">
+                    <div class="card-box-header">
+                        <span class="card-box-title">📋 Заказы</span>
+                        <button class="btn btn-primary btn-sm" onclick="loadDeliveryOrders()">🔄 Обновить</button>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Телефон</th>
+                                <th>Тип</th>
+                                <th>Адрес</th>
+                                <th>Сумма</th>
+                                <th>Оплата</th>
+                                <th>Время</th>
+                                <th>Статус</th>
+                                <th>Действие</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orders-tbody">
+                            <tr><td colspan="9" class="empty-state">Заказов пока нет. Они появятся при оформлении через приложение.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </section>
+
 
             <!-- ═══ REFERRALS ═══ -->
             <section class="section" id="sec-referrals">
@@ -2113,7 +2140,7 @@
             if (id === 'analytics') renderAnalytics();
             if (id === 'schedule') renderStores();
             if (id === 'products') renderProducts();
-            if (id === 'orders') loadOrders();
+            if (id === 'orders') { loadOrders(); loadDeliveryOrders(); }
             if (id === 'referrals') renderReferrals();
             if (id === 'codes') renderCodes();
             if (id === 'chat') renderChat();
@@ -2570,6 +2597,51 @@
             save();
             showToast('✅ Настройки заказов сохранены — синхронизируются с приложением');
             addLog('info', 'Настройки заказов обновлены (API + локально)');
+        }
+
+        // ─── DELIVERY ORDERS ─────────────────────────────
+        const ORDER_STATUSES = {
+            'new': { label: '🆕 Новый', badge: 'badge-pending' },
+            'confirmed': { label: '✅ Подтверждён', badge: 'badge-active' },
+            'preparing': { label: '🍳 Готовится', badge: 'badge-active' },
+            'delivering': { label: '🚚 Доставляется', badge: 'badge-active' },
+            'delivered': { label: '✅ Доставлен', badge: 'badge-active' },
+            'cancelled': { label: '❌ Отменён', badge: 'badge-inactive' },
+        };
+
+        async function loadDeliveryOrders() {
+            const tb = document.getElementById('orders-tbody');
+            tb.innerHTML = '<tr><td colspan="9" class="empty-state">Загрузка...</td></tr>';
+            try {
+                const res = await fetch('/api/orders');
+                const data = await res.json();
+                const list = data.orders || [];
+                if (!list.length) { tb.innerHTML = '<tr><td colspan="9" class="empty-state">Заказов пока нет. Они появятся при оформлении через приложение.</td></tr>'; return; }
+                tb.innerHTML = list.map(o => {
+                    const d = new Date(o.createdAt);
+                    const dateStr = d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
+                    const st = ORDER_STATUSES[o.status] || ORDER_STATUSES['new'];
+                    const typeIcon = o.delivery === 'delivery' ? '🚚' : '🏪';
+                    const statusOptions = Object.entries(ORDER_STATUSES).map(([k,v]) => `<option value="${k}" ${k===o.status?'selected':''}>${v.label}</option>`).join('');
+                    return `<tr>
+                        <td><code>${o.id}</code></td>
+                        <td>${o.phone || '—'}</td>
+                        <td>${typeIcon} ${o.delivery === 'delivery' ? 'Доставка' : 'Самовывоз'}</td>
+                        <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.address || '—'}</td>
+                        <td style="font-weight:700;color:var(--violet)">${Number(o.total).toLocaleString('ru')} сўм</td>
+                        <td>${o.payMethod || '—'}</td>
+                        <td style="font-size:11px;color:var(--muted)">${dateStr}</td>
+                        <td><span class="badge ${st.badge}">${st.label}</span></td>
+                        <td><select onchange="updateOrderStatus('${o.id}', this.value)" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px">${statusOptions}</select></td>
+                    </tr>`;
+                }).join('');
+            } catch(e) { tb.innerHTML = `<tr><td colspan="9" class="empty-state">Ошибка: ${e.message}</td></tr>`; }
+        }
+
+        async function updateOrderStatus(id, status) {
+            await fetch(`/api/orders/${id}/status`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status}) });
+            showToast(`📦 Заказ ${id}: ${ORDER_STATUSES[status]?.label || status}`);
+            addLog('info', `Заказ ${id} → ${status}`);
         }
 
         // ─── REFERRALS ───────────────────────────────────────
