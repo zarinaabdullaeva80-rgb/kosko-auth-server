@@ -1337,6 +1337,9 @@
             <div class="nav-item" onclick="goTo('referrals',this)"><span class="ni">🤝</span> Рефералы</div>
             <div class="nav-item" onclick="goTo('codes',this)"><span class="ni">🎫</span> Промокоды</div>
             <div class="nav-item" onclick="goTo('chat',this)"><span class="ni">💬</span> Чат</div>
+            <div class="nav-item" onclick="goTo('servers',this)"><span class="ni">🖥️</span> Серверы</div>
+            <div class="nav-item" onclick="goTo('catalog',this)"><span class="ni">📦</span> Каталог</div>
+            <div class="nav-item" onclick="goTo('settings',this)"><span class="ni">⚙️</span> Настройки</div>
         </nav>
         <div class="sidebar-bottom">
             <div class="admin-badge">
@@ -1790,6 +1793,103 @@
                 </div>
             </section>
 
+            <!-- ═══ SERVERS REGISTRY ═══ -->
+            <section class="section" id="sec-servers">
+                <div class="section-heading">🖥️ Реестр серверов</div>
+                <div class="section-desc">Серверы, найденные мобильным приложением в магазинах. Одобрите или отклоните каждый.</div>
+                <div class="card-box">
+                    <div class="card-box-header">
+                        <span class="card-box-title">Все обнаруженные серверы</span>
+                        <button class="btn btn-ghost" onclick="loadServers()">🔄 Обновить</button>
+                    </div>
+                    <table>
+                        <thead><tr><th>URL / IP</th><th>Имя</th><th>Сеть</th><th>Тип</th><th>Обнаружен</th><th>Устройств</th><th>Статус</th><th>Действие</th></tr></thead>
+                        <tbody id="servers-tbody"><tr><td colspan="8" class="empty-state">Загрузка...</td></tr></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ═══ CATALOG / PRODUCTS ═══ -->
+            <section class="section" id="sec-catalog">
+                <div class="section-heading">📦 Каталог товаров</div>
+                <div class="section-desc">Управление товарами. Изменения применяются в приложении через ~30 сек.</div>
+
+                <!-- Toolbar -->
+                <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+                    <input class="search-input" id="prod-search" placeholder="🔍 Поиск товаров..." oninput="filterProducts()" style="flex:1;min-width:180px">
+                    <button class="btn btn-primary" onclick="openProdModal()">+ Добавить товар</button>
+                    <button class="btn btn-ghost" onclick="exportProducts()">⬇️ Экспорт CSV</button>
+                    <label class="btn btn-ghost" style="cursor:pointer">📂 Импорт CSV/Excel<input type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="importProducts(event)"></label>
+                    <button class="btn btn-ghost" onclick="loadProducts()">🔄</button>
+                </div>
+
+                <div class="card-box">
+                    <table>
+                        <thead><tr><th>Штрихкод</th><th>Название</th><th>Цена</th><th>Категория</th><th>Ед.</th><th>Действия</th></tr></thead>
+                        <tbody id="products-tbody"><tr><td colspan="6" class="empty-state">Загрузка...</td></tr></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ═══ SETTINGS ═══ -->
+            <section class="section" id="sec-settings">
+                <div class="section-heading">⚙️ Настройки магазина</div>
+                <div class="section-desc">Изменения применяются в приложении автоматически.</div>
+
+                <!-- Delivery toggle -->
+                <div class="card-box" style="margin-bottom:16px">
+                    <div class="card-box-header"><span class="card-box-title">🚚 Доставка</span></div>
+                    <div style="padding:20px">
+                        <div class="toggle-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+                            <div class="toggle-label">
+                                <b>Доставка включена</b>
+                                <span id="delivery-status-text">Загрузка...</span>
+                            </div>
+                            <div class="toggle" id="delivery-toggle" onclick="toggleDelivery()"></div>
+                        </div>
+                        <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;gap:12px">
+                            <div class="form-group">
+                                <label>Стоимость доставки (сўм)</label>
+                                <input type="number" id="deliveryFee" placeholder="10000">
+                            </div>
+                            <div class="form-group">
+                                <label>Бесплатно от (сўм)</label>
+                                <input type="number" id="freeDeliveryThreshold" placeholder="150000">
+                            </div>
+                            <div class="form-group">
+                                <label>Минимальный заказ (сўм)</label>
+                                <input type="number" id="minOrderAmount" placeholder="20000">
+                            </div>
+                        </div>
+                        <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+                            <div class="form-group">
+                                <label>Режим работы с</label>
+                                <input type="time" id="workFrom" value="08:00">
+                            </div>
+                            <div class="form-group">
+                                <label>Режим работы до</label>
+                                <input type="time" id="workTo" value="22:00">
+                            </div>
+                        </div>
+                        <div class="form-actions" style="margin-top:16px">
+                            <button class="btn btn-primary" onclick="saveSettings()">💾 Сохранить настройки</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Promocodes -->
+                <div class="card-box">
+                    <div class="card-box-header">
+                        <span class="card-box-title">🎫 Промокоды</span>
+                        <button class="btn btn-primary btn-sm" onclick="openPromoModal()">+ Создать</button>
+                    </div>
+                    <table>
+                        <thead><tr><th>Код</th><th>Скидка</th><th>Мин. заказ</th><th>Использований</th><th>Статус</th><th>Удалить</th></tr></thead>
+                        <tbody id="promos-tbody"><tr><td colspan="6" class="empty-state">Загрузка...</td></tr></tbody>
+                    </table>
+                </div>
+            </section>
+
         </div><!-- /content-area -->
     </div><!-- /main -->
 
@@ -1899,6 +1999,48 @@
                     <button class="btn btn-ghost" onclick="closeStoreModal()">Отмена</button>
                     <button class="btn btn-primary" onclick="saveStore()">💾 Сохранить</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Modal -->
+    <div class="modal-overlay" id="prod-modal">
+        <div class="modal">
+            <div class="modal-title">
+                <span id="prod-modal-title">+ Добавить товар</span>
+                <button class="modal-close" onclick="closeProdModal()">✕</button>
+            </div>
+            <div class="form-grid">
+                <div class="form-group"><label>Название *</label><input id="pm-name" placeholder="Молоко Parmalat 1л"></div>
+                <div class="form-group"><label>Цена (сўм) *</label><input type="number" id="pm-price" placeholder="12000"></div>
+                <div class="form-group"><label>Штрихкод</label><input id="pm-barcode" placeholder="4600001234567"></div>
+                <div class="form-group"><label>Категория</label><input id="pm-category" placeholder="Молочные"></div>
+                <div class="form-group"><label>Ед. изм.</label><input id="pm-unit" placeholder="шт" value="шт"></div>
+                <div class="form-group"><label>URL фото</label><input id="pm-image" placeholder="https://..."></div>
+            </div>
+            <div class="form-actions" style="margin-top:16px">
+                <button class="btn btn-ghost" onclick="closeProdModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="saveProd()">💾 Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Promocode Create Modal -->
+    <div class="modal-overlay" id="promo-create-modal">
+        <div class="modal">
+            <div class="modal-title">
+                <span>🎫 Создать промокод</span>
+                <button class="modal-close" onclick="closePromoModal()">✕</button>
+            </div>
+            <div class="form-grid">
+                <div class="form-group"><label>Код *</label><input id="new-promo-code" placeholder="SUMMER20" style="text-transform:uppercase"></div>
+                <div class="form-group"><label>Скидка % (или 0)</label><input type="number" id="new-promo-pct" placeholder="10"></div>
+                <div class="form-group"><label>Скидка сумма (или 0)</label><input type="number" id="new-promo-amt" placeholder="5000"></div>
+                <div class="form-group"><label>Мин. сумма заказа</label><input type="number" id="new-promo-min" placeholder="50000"></div>
+            </div>
+            <div class="form-actions" style="margin-top:16px">
+                <button class="btn btn-ghost" onclick="closePromoModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="savePromocode()">✅ Создать</button>
             </div>
         </div>
     </div>
@@ -2601,7 +2743,271 @@
 
         // Initial load
         loadCloudChat();
+
+        // ─── SERVERS REGISTRY ─────────────────────────────
+        async function loadServers() {
+            const tb = document.getElementById('servers-tbody');
+            tb.innerHTML = '<tr><td colspan="8" class="empty-state">Загрузка...</td></tr>';
+            try {
+                const res = await fetch('/api/registry/servers');
+                const data = await res.json();
+                const servers = data.servers || [];
+                if (!servers.length) { tb.innerHTML = '<tr><td colspan="8" class="empty-state">Серверов пока нет. Они появятся после сканирования в мобильном приложении.</td></tr>'; return; }
+                tb.innerHTML = servers.map(s => {
+                    const d = new Date(s.firstSeen || s.lastSeen || Date.now());
+                    const dateStr = d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
+                    const statusBadge = s.status === 'approved'
+                        ? '<span class="badge badge-active">✅ Одобрен</span>'
+                        : s.status === 'rejected'
+                        ? '<span class="badge badge-inactive">❌ Отклонён</span>'
+                        : '<span class="badge badge-pending">🆕 Новый</span>';
+                    const actionBtns = s.status !== 'approved'
+                        ? `<button class="btn btn-primary btn-sm" onclick="approveServer('${s.id}')">✅ Одобрить</button>`
+                        : '';
+                    const rejectBtn = s.status !== 'rejected'
+                        ? `<button class="btn btn-danger btn-sm" onclick="rejectServer('${s.id}')">❌</button>`
+                        : '';
+                    return `<tr>
+                        <td><code style="font-size:11px">${s.baseUrl}</code></td>
+                        <td>${s.name || '—'}</td>
+                        <td>${s.networkType || '—'}</td>
+                        <td>${s.type || '—'}</td>
+                        <td style="font-size:11px;color:var(--muted)">${dateStr}</td>
+                        <td>${s.reportCount || 1}</td>
+                        <td>${statusBadge}</td>
+                        <td style="display:flex;gap:4px">${actionBtns}${rejectBtn}</td>
+                    </tr>`;
+                }).join('');
+            } catch(e) { tb.innerHTML = `<tr><td colspan="8" class="empty-state">Ошибка: ${e.message}</td></tr>`; }
+        }
+
+        async function approveServer(id) {
+            await fetch(`/api/registry/servers/${id}/approve`, { method: 'POST' });
+            showToast('✅ Сервер одобрен — приложения подключатся автоматически');
+            loadServers();
+        }
+        async function rejectServer(id) {
+            await fetch(`/api/registry/servers/${id}/reject`, { method: 'POST' });
+            showToast('❌ Сервер отклонён');
+            loadServers();
+        }
+
+        // ─── PRODUCTS CATALOG ─────────────────────────────
+        let allProducts = [];
+
+        async function loadProducts() {
+            const tb = document.getElementById('products-tbody');
+            tb.innerHTML = '<tr><td colspan="6" class="empty-state">Загрузка...</td></tr>';
+            try {
+                const res = await fetch('/api/products');
+                const data = await res.json();
+                allProducts = data.products || [];
+                renderProducts(allProducts);
+            } catch(e) { tb.innerHTML = `<tr><td colspan="6" class="empty-state">Ошибка: ${e.message}</td></tr>`; }
+        }
+
+        function renderProducts(list) {
+            const tb = document.getElementById('products-tbody');
+            if (!list.length) { tb.innerHTML = '<tr><td colspan="6" class="empty-state">Товаров нет. Добавьте первый или импортируйте из CSV.</td></tr>'; return; }
+            tb.innerHTML = list.map(p => `<tr>
+                <td><span class="code-tag">${p.barcode || '—'}</span></td>
+                <td>${p.name}</td>
+                <td style="font-weight:700;color:var(--violet)">${Number(p.price).toLocaleString('ru')} сўм</td>
+                <td>${p.category || '—'}</td>
+                <td>${p.unit || 'шт'}</td>
+                <td style="display:flex;gap:4px">
+                    <button class="btn btn-primary btn-sm" onclick="openProdModal('${p.id}')">✏️</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteProd('${p.id}')">🗑️</button>
+                </td>
+            </tr>`).join('');
+        }
+
+        function filterProducts() {
+            const q = document.getElementById('prod-search').value.toLowerCase();
+            renderProducts(allProducts.filter(p => p.name.toLowerCase().includes(q) || (p.barcode||'').includes(q)));
+        }
+
+        let editProdId = null;
+        function openProdModal(id) {
+            editProdId = id || null;
+            const p = id ? allProducts.find(x => x.id === id) : {};
+            document.getElementById('prod-modal-title').textContent = id ? '✏️ Редактировать товар' : '+ Добавить товар';
+            document.getElementById('pm-name').value = p?.name || '';
+            document.getElementById('pm-price').value = p?.price || '';
+            document.getElementById('pm-barcode').value = p?.barcode || '';
+            document.getElementById('pm-category').value = p?.category || '';
+            document.getElementById('pm-unit').value = p?.unit || 'шт';
+            document.getElementById('pm-image').value = p?.imageUrl || '';
+            document.getElementById('prod-modal').classList.add('open');
+        }
+        function closeProdModal() { document.getElementById('prod-modal').classList.remove('open'); }
+
+        async function saveProd() {
+            const body = {
+                name: document.getElementById('pm-name').value.trim(),
+                price: document.getElementById('pm-price').value,
+                barcode: document.getElementById('pm-barcode').value.trim(),
+                category: document.getElementById('pm-category').value.trim(),
+                unit: document.getElementById('pm-unit').value.trim(),
+                imageUrl: document.getElementById('pm-image').value.trim(),
+            };
+            if (!body.name || !body.price) return showToast('⚠️ Введите название и цену');
+            const url = editProdId ? `/api/products/${editProdId}` : '/api/products';
+            const method = editProdId ? 'PUT' : 'POST';
+            await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+            showToast(editProdId ? '✅ Товар обновлён' : '✅ Товар добавлен');
+            closeProdModal();
+            loadProducts();
+        }
+
+        async function deleteProd(id) {
+            if (!confirm('Удалить товар?')) return;
+            await fetch(`/api/products/${id}`, { method: 'DELETE' });
+            showToast('🗑️ Товар удалён');
+            loadProducts();
+        }
+
+        async function exportProducts() {
+            const res = await fetch('/api/products/export');
+            const data = await res.json();
+            const rows = [['Штрихкод','Название','Цена','Категория','Ед.изм','Описание']];
+            (data.products||[]).forEach(p => rows.push([p.barcode||'',p.name,p.price,p.category||'',p.unit||'шт',p.description||'']));
+            const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+            const a = document.createElement('a');
+            a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
+            a.download = `kosko_products_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            showToast('📤 CSV экспортирован');
+        }
+
+        async function importProducts(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const text = await file.text();
+            const lines = text.split('\n').filter(l => l.trim());
+            const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+            const items = [];
+            for (let i = 1; i < lines.length; i++) {
+                const vals = lines[i].split(',').map(v => v.replace(/"/g,'').trim());
+                const obj = {};
+                headers.forEach((h, idx) => obj[h.toLowerCase()] = vals[idx] || '');
+                if (obj['название'] || obj['name']) {
+                    items.push({
+                        name: obj['название'] || obj['name'],
+                        price: Number(obj['цена'] || obj['price'] || 0),
+                        barcode: obj['штрихкод'] || obj['barcode'] || '',
+                        category: obj['категория'] || obj['category'] || 'Прочее',
+                        unit: obj['ед.изм'] || obj['unit'] || 'шт',
+                    });
+                }
+            }
+            if (!items.length) return showToast('⚠️ Не найдено товаров в файле');
+            const res = await fetch('/api/products/sync', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ products: items }) });
+            const data = await res.json();
+            showToast(`✅ Импортировано: +${data.added} новых, ~${data.updated} обновлено`);
+            loadProducts();
+            event.target.value = '';
+        }
+
+        // ─── SETTINGS ─────────────────────────────────────
+        async function loadSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const s = await res.json();
+                const tog = document.getElementById('delivery-toggle');
+                const txt = document.getElementById('delivery-status-text');
+                if (tog) { tog.className = 'toggle' + (s.deliveryEnabled ? ' on' : ''); }
+                if (txt) txt.textContent = s.deliveryEnabled ? 'Включена' : 'Выключена';
+                if (document.getElementById('deliveryFee')) document.getElementById('deliveryFee').value = s.deliveryFee || '';
+                if (document.getElementById('freeDeliveryThreshold')) document.getElementById('freeDeliveryThreshold').value = s.freeDeliveryThreshold || '';
+                if (document.getElementById('minOrderAmount')) document.getElementById('minOrderAmount').value = s.minOrderAmount || '';
+                if (document.getElementById('workFrom')) document.getElementById('workFrom').value = s.workingHours?.from || '08:00';
+                if (document.getElementById('workTo')) document.getElementById('workTo').value = s.workingHours?.to || '22:00';
+            } catch(e) {}
+        }
+
+        async function toggleDelivery() {
+            const res = await fetch('/api/settings/delivery/toggle', { method: 'POST' });
+            const data = await res.json();
+            const tog = document.getElementById('delivery-toggle');
+            const txt = document.getElementById('delivery-status-text');
+            tog.className = 'toggle' + (data.deliveryEnabled ? ' on' : '');
+            txt.textContent = data.deliveryEnabled ? 'Включена' : 'Выключена';
+            showToast(data.deliveryEnabled ? '🚚 Доставка включена' : '🚫 Доставка выключена');
+            addLog('info', `Доставка: ${data.deliveryEnabled ? 'включена' : 'выключена'}`);
+        }
+
+        async function saveSettings() {
+            const body = {
+                deliveryFee: Number(document.getElementById('deliveryFee').value) || 10000,
+                freeDeliveryThreshold: Number(document.getElementById('freeDeliveryThreshold').value) || 150000,
+                minOrderAmount: Number(document.getElementById('minOrderAmount').value) || 20000,
+                workingHours: {
+                    from: document.getElementById('workFrom').value || '08:00',
+                    to: document.getElementById('workTo').value || '22:00',
+                },
+            };
+            await fetch('/api/settings', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+            showToast('💾 Настройки сохранены');
+            addLog('info', 'Настройки магазина обновлены');
+        }
+
+        async function loadPromocodes() {
+            const tb = document.getElementById('promos-tbody');
+            if (!tb) return;
+            try {
+                const res = await fetch('/api/promocodes');
+                const data = await res.json();
+                const list = data.promocodes || [];
+                if (!list.length) { tb.innerHTML = '<tr><td colspan="6" class="empty-state">Промокодов нет</td></tr>'; return; }
+                tb.innerHTML = list.map(p => `<tr>
+                    <td><span class="code-tag">${p.code}</span></td>
+                    <td>${p.discountPercent ? p.discountPercent+'%' : (p.discountAmount||0).toLocaleString('ru')+' сўм'}</td>
+                    <td>${(p.minOrder||0).toLocaleString('ru')} сўм</td>
+                    <td>${p.usageCount} / ${p.usageLimit}</td>
+                    <td><span class="badge ${p.active ? 'badge-active' : 'badge-inactive'}">${p.active ? 'Активен' : 'Отключён'}</span></td>
+                    <td><button class="btn btn-danger btn-sm" onclick="deletePromocode('${p.code}')">🗑️</button></td>
+                </tr>`).join('');
+            } catch(e) {}
+        }
+
+        async function deletePromocode(code) {
+            if (!confirm(`Удалить промокод ${code}?`)) return;
+            await fetch(`/api/promocodes/${code}`, { method: 'DELETE' });
+            showToast('🗑️ Промокод удалён');
+            loadPromocodes();
+        }
+
+        let promoModalOpen = false;
+        function openPromoModal() {
+            document.getElementById('promo-create-modal').classList.add('open');
+        }
+        function closePromoModal() {
+            document.getElementById('promo-create-modal').classList.remove('open');
+        }
+
+        async function savePromocode() {
+            const code = document.getElementById('new-promo-code').value.trim().toUpperCase();
+            const discountPercent = Number(document.getElementById('new-promo-pct').value) || 0;
+            const discountAmount = Number(document.getElementById('new-promo-amt').value) || 0;
+            const minOrder = Number(document.getElementById('new-promo-min').value) || 0;
+            if (!code) return showToast('⚠️ Введите код');
+            await fetch('/api/promocodes', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code, discountPercent, discountAmount, minOrder}) });
+            showToast(`✅ Промокод ${code} создан`);
+            closePromoModal();
+            loadPromocodes();
+        }
+
+        // ─── EXTEND goTo to load sections on navigate ────
+        const _origGoTo = goTo;
+        function goTo(id, el) {
+            _origGoTo(id, el);
+            if (id === 'servers') loadServers();
+            if (id === 'catalog') loadProducts();
+            if (id === 'settings') { loadSettings(); loadPromocodes(); }
+        }
     </script>
+
 </body>
 
 </html>
