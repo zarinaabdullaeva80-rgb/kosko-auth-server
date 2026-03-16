@@ -2117,6 +2117,9 @@
             if (id === 'referrals') renderReferrals();
             if (id === 'codes') renderCodes();
             if (id === 'chat') renderChat();
+            if (id === 'servers') loadServers();
+            if (id === 'catalog') loadProducts();
+            if (id === 'settings') { loadSettings(); loadPromocodes(); }
         }
 
         // ─── TOAST ────────────────────────────────────────
@@ -2998,14 +3001,7 @@
             loadPromocodes();
         }
 
-        // ─── EXTEND goTo to load sections on navigate ────
-        const _origGoTo = goTo;
-        function goTo(id, el) {
-            _origGoTo(id, el);
-            if (id === 'servers') loadServers();
-            if (id === 'catalog') loadProducts();
-            if (id === 'settings') { loadSettings(); loadPromocodes(); }
-        }
+        // goTo extensions merged into original goTo above
     </script>
 
 </body>
