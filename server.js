@@ -439,6 +439,167 @@ app.post('/api/push/send', async (req, res) => {
     }
 });
 
+// ─── STORE SETTINGS (Phase 0.1) ─────────────────────
+// Controls delivery toggle, working hours, etc.
+const storeSettings = {
+    deliveryEnabled: true,
+    freeDeliveryThreshold: 150000, // сум
+    deliveryFee: 10000,
+    minOrderAmount: 20000,
+    workingHours: { from: '08:00', to: '22:00' },
+    storeName: 'KOSKO',
+    storePhone: '+998 XX XXX XX XX',
+    updatedAt: Date.now(),
+};
+
+app.get('/api/settings', (req, res) => {
+    res.json(storeSettings);
+});
+
+app.post('/api/settings', (req, res) => {
+    Object.assign(storeSettings, req.body, { updatedAt: Date.now() });
+    console.log('⚙️ Settings updated:', JSON.stringify(storeSettings));
+    res.json({ ok: true, settings: storeSettings });
+});
+
+// Convenience toggle for delivery
+app.post('/api/settings/delivery/toggle', (req, res) => {
+    storeSettings.deliveryEnabled = !storeSettings.deliveryEnabled;
+    storeSettings.updatedAt = Date.now();
+    console.log(`🚚 Delivery ${storeSettings.deliveryEnabled ? 'ENABLED' : 'DISABLED'}`);
+    res.json({ ok: true, deliveryEnabled: storeSettings.deliveryEnabled });
+});
+
+// ─── PRODUCTS CRUD (Phase 0.4) ───────────────────────
+const products = new Map(); // id → product
+let productIdCounter = 1;
+
+app.get('/api/products', (req, res) => {
+    const list = Array.from(products.values());
+    const { category, q } = req.query;
+    const filtered = list
+        .filter(p => !category || p.category === category)
+        .filter(p => !q || p.name.toLowerCase().includes(q.toLowerCase()));
+    res.json({ products: filtered, total: filtered.length, updatedAt: Date.now() });
+});
+
+app.post('/api/products', (req, res) => {
+    const { name, price, barcode, category, unit, imageUrl, description } = req.body;
+    if (!name || !price) return res.status(400).json({ error: 'name and price required' });
+    const id = 'prod_' + (productIdCounter++);
+    const product = { id, name, price: Number(price), barcode: barcode || '', category: category || 'Прочее', unit: unit || 'шт', imageUrl: imageUrl || '', description: description || '', createdAt: Date.now(), updatedAt: Date.now() };
+    products.set(id, product);
+    res.json({ ok: true, product });
+});
+
+app.put('/api/products/:id', (req, res) => {
+    const p = products.get(req.params.id);
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    Object.assign(p, req.body, { updatedAt: Date.now() });
+    res.json({ ok: true, product: p });
+});
+
+app.delete('/api/products/:id', (req, res) => {
+    if (!products.has(req.params.id)) return res.status(404).json({ error: 'Not found' });
+    products.delete(req.params.id);
+    res.json({ ok: true });
+});
+
+// Mass import from 1C or Excel parse result
+app.post('/api/products/sync', (req, res) => {
+    const { products: items } = req.body;
+    if (!Array.isArray(items)) return res.status(400).json({ error: 'products array required' });
+    let added = 0, updated = 0;
+    for (const item of items) {
+        const existing = Array.from(products.values()).find(p => p.barcode === item.barcode);
+        if (existing) {
+            Object.assign(existing, item, { updatedAt: Date.now() });
+            updated++;
+        } else {
+            const id = 'prod_' + (productIdCounter++);
+            products.set(id, { id, ...item, createdAt: Date.now(), updatedAt: Date.now() });
+            added++;
+        }
+    }
+    console.log(`📦 Products sync: +${added} new, ~${updated} updated`);
+    res.json({ ok: true, added, updated, total: products.size });
+});
+
+// Export all products as JSON (for CSV generation on client)
+app.get('/api/products/export', (req, res) => {
+    res.json({ products: Array.from(products.values()) });
+});
+
+// ─── BANNERS CRUD (Phase 0.4) ────────────────────────
+const banners = [];
+let bannerIdCounter = 1;
+
+app.get('/api/banners', (req, res) => {
+    res.json({ banners: banners.filter(b => b.active), updatedAt: Date.now() });
+});
+app.post('/api/banners', (req, res) => {
+    const { title, imageUrl, linkScreen, linkParam, color } = req.body;
+    const banner = { id: 'ban_' + (bannerIdCounter++), title: title || '', imageUrl: imageUrl || '', linkScreen: linkScreen || '', linkParam: linkParam || '', color: color || '#6C63FF', active: true, createdAt: Date.now() };
+    banners.push(banner);
+    res.json({ ok: true, banner });
+});
+app.delete('/api/banners/:id', (req, res) => {
+    const idx = banners.findIndex(b => b.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Not found' });
+    banners[idx].active = false;
+    res.json({ ok: true });
+});
+
+// ─── PROMOCODES CRUD (Phase 0.4) ─────────────────────
+const promocodes = new Map();
+
+app.get('/api/promocodes', (req, res) => {
+    res.json({ promocodes: Array.from(promocodes.values()) });
+});
+app.post('/api/promocodes', (req, res) => {
+    const { code, discountPercent, discountAmount, minOrder, expiresAt, usageLimit } = req.body;
+    if (!code) return res.status(400).json({ error: 'code required' });
+    const promo = { code: code.toUpperCase(), discountPercent: discountPercent || 0, discountAmount: discountAmount || 0, minOrder: minOrder || 0, expiresAt: expiresAt || null, usageLimit: usageLimit || 999, usageCount: 0, active: true, createdAt: Date.now() };
+    promocodes.set(promo.code, promo);
+    res.json({ ok: true, promo });
+});
+app.post('/api/promocodes/verify', (req, res) => {
+    const { code, orderAmount } = req.body;
+    const promo = promocodes.get((code || '').toUpperCase());
+    if (!promo || !promo.active) return res.json({ valid: false, reason: 'Промокод не найден' });
+    if (promo.expiresAt && Date.now() > promo.expiresAt) return res.json({ valid: false, reason: 'Промокод истёк' });
+    if (promo.usageCount >= promo.usageLimit) return res.json({ valid: false, reason: 'Лимит использований исчерпан' });
+    if (orderAmount && orderAmount < promo.minOrder) return res.json({ valid: false, reason: `Минимальная сумма: ${promo.minOrder.toLocaleString('ru')} сўм` });
+    promo.usageCount++;
+    const discount = promo.discountPercent ? Math.floor(orderAmount * promo.discountPercent / 100) : promo.discountAmount;
+    res.json({ valid: true, discount, promo });
+});
+app.delete('/api/promocodes/:code', (req, res) => {
+    const promo = promocodes.get(req.params.code.toUpperCase());
+    if (!promo) return res.status(404).json({ error: 'Not found' });
+    promo.active = false;
+    res.json({ ok: true });
+});
+
+// ─── PROMOTIONS (Phase 0.4) ──────────────────────────
+const promotions = [];
+let promoIdCounter = 1;
+app.get('/api/promotions', (req, res) => {
+    res.json({ promotions: promotions.filter(p => p.active), updatedAt: Date.now() });
+});
+app.post('/api/promotions', (req, res) => {
+    const { title, description, imageUrl, discountPercent, expiresAt } = req.body;
+    const promo = { id: 'prom_' + (promoIdCounter++), title, description: description || '', imageUrl: imageUrl || '', discountPercent: discountPercent || 0, expiresAt: expiresAt || null, active: true, createdAt: Date.now() };
+    promotions.push(promo);
+    res.json({ ok: true, promotion: promo });
+});
+app.delete('/api/promotions/:id', (req, res) => {
+    const p = promotions.find(x => x.id === req.params.id);
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    p.active = false;
+    res.json({ ok: true });
+});
+
 // ─── SERVER REGISTRY ─────────────────────────────────
 // Stores all servers discovered by mobile apps
 // Admin reviews them and approves which ones to sync
