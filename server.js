@@ -25,6 +25,7 @@ function persistData() {
             orders: Array.from(orders.entries()),
             orderIdCounter,
             serverRegistry: Array.from(serverRegistry.entries()),
+            loyaltyCards: Array.from(loyaltyCards.entries()),
             promotions,
             promoIdCounter,
             savedAt: Date.now(),
@@ -789,6 +790,175 @@ app.get('/api/registry/approved', (req, res) => {
     res.json({ servers: approved });
 });
 
+// ─── LOYALTY CARDS ───────────────────────────────────
+// Cards stored on cloud, synced with store servers
+// loyaltyCards Map is declared above (line ~296)
+
+// Get card by phone
+app.get('/api/loyalty/:phone', (req, res) => {
+    const phone = req.params.phone.replace(/\D/g, '');
+    const card = loyaltyCards.get(phone);
+    if (!card) return res.json({ found: false, phone });
+    res.json({ found: true, card });
+});
+
+// Create or update card
+app.post('/api/loyalty', (req, res) => {
+    const { phone, name, balance, level } = req.body;
+    if (!phone) return res.status(400).json({ error: 'phone required' });
+    const cleanPhone = phone.replace(/\D/g, '');
+    const existing = loyaltyCards.get(cleanPhone);
+    const card = {
+        phone: cleanPhone,
+        name: name || existing?.name || '',
+        balance: balance ?? existing?.balance ?? 0,
+        level: level || existing?.level || 'Стандарт',
+        totalSpent: existing?.totalSpent || 0,
+        transactions: existing?.transactions || [],
+        createdAt: existing?.createdAt || Date.now(),
+        updatedAt: Date.now(),
+    };
+    loyaltyCards.set(cleanPhone, card);
+    persistData();
+    res.json({ ok: true, card });
+});
+
+// Add points
+app.post('/api/loyalty/:phone/add', (req, res) => {
+    const phone = req.params.phone.replace(/\D/g, '');
+    let card = loyaltyCards.get(phone);
+    if (!card) {
+        card = { phone, name: '', balance: 0, level: 'Стандарт', totalSpent: 0, transactions: [], createdAt: Date.now(), updatedAt: Date.now() };
+    }
+    const { amount, reason } = req.body;
+    card.balance += Number(amount) || 0;
+    card.transactions.push({ type: 'add', amount: Number(amount), reason: reason || 'Начисление', date: Date.now() });
+    card.updatedAt = Date.now();
+    loyaltyCards.set(phone, card);
+    persistData();
+    console.log(`⭐ Loyalty +${amount} → ${phone} (balance: ${card.balance})`);
+    res.json({ ok: true, card });
+});
+
+// Spend points
+app.post('/api/loyalty/:phone/spend', (req, res) => {
+    const phone = req.params.phone.replace(/\D/g, '');
+    const card = loyaltyCards.get(phone);
+    if (!card) return res.status(404).json({ error: 'Карта не найдена' });
+    const { amount, reason } = req.body;
+    if (card.balance < Number(amount)) return res.json({ ok: false, error: 'Недостаточно баллов', balance: card.balance });
+    card.balance -= Number(amount) || 0;
+    card.totalSpent += Number(amount) || 0;
+    card.transactions.push({ type: 'spend', amount: Number(amount), reason: reason || 'Списание', date: Date.now() });
+    card.updatedAt = Date.now();
+    // Auto level upgrade
+    if (card.totalSpent >= 1000000) card.level = 'Платинум';
+    else if (card.totalSpent >= 500000) card.level = 'Золото';
+    else if (card.totalSpent >= 100000) card.level = 'Серебро';
+    persistData();
+    console.log(`⭐ Loyalty -${amount} → ${phone} (balance: ${card.balance})`);
+    res.json({ ok: true, card });
+});
+
+// List all cards (admin)
+app.get('/api/loyalty', (req, res) => {
+    res.json({ cards: Array.from(loyaltyCards.values()), total: loyaltyCards.size });
+});
+
+// ─── STORE SERVER BRIDGE ─────────────────────────────
+// Fetches data from approved store servers (1C/Frontol)
+app.post('/api/bridge/sync-loyalty', async (req, res) => {
+    const approved = Array.from(serverRegistry.values()).filter(s => s.syncEnabled);
+    if (!approved.length) return res.json({ ok: false, error: 'Нет одобренных серверов' });
+
+    let synced = 0, errors = 0;
+    for (const srv of approved) {
+        try {
+            // Try common 1C loyalty endpoints
+            const endpoints = [
+                `${srv.baseUrl}/api/loyalty/cards`,
+                `${srv.baseUrl}/loyalty`,
+                `${srv.baseUrl}/api/cards`,
+                `${srv.baseUrl}/hs/loyalty/cards`,  // 1C HTTP service
+            ];
+            for (const url of endpoints) {
+                try {
+                    const controller = new AbortController();
+                    setTimeout(() => controller.abort(), 5000);
+                    const r = await fetch(url, { signal: controller.signal });
+                    if (r.ok) {
+                        const data = await r.json();
+                        const cards = data.cards || data.data || (Array.isArray(data) ? data : []);
+                        for (const c of cards) {
+                            const phone = (c.phone || c.tel || c.mobile || '').replace(/\D/g, '');
+                            if (!phone) continue;
+                            const existing = loyaltyCards.get(phone) || {};
+                            loyaltyCards.set(phone, {
+                                phone,
+                                name: c.name || c.fio || existing.name || '',
+                                balance: c.balance ?? c.bonus ?? existing.balance ?? 0,
+                                level: c.level || c.category || existing.level || 'Стандарт',
+                                totalSpent: c.totalSpent || existing.totalSpent || 0,
+                                transactions: existing.transactions || [],
+                                createdAt: existing.createdAt || Date.now(),
+                                updatedAt: Date.now(),
+                                source: srv.baseUrl,
+                            });
+                            synced++;
+                        }
+                        console.log(`⭐ Synced ${cards.length} loyalty cards from ${url}`);
+                        break; // Found working endpoint, stop trying
+                    }
+                } catch {}
+            }
+        } catch { errors++; }
+    }
+    persistData();
+    res.json({ ok: true, synced, errors, total: loyaltyCards.size });
+});
+
+// Try to sync products from approved servers
+app.post('/api/bridge/sync-products', async (req, res) => {
+    const approved = Array.from(serverRegistry.values()).filter(s => s.syncEnabled);
+    if (!approved.length) return res.json({ ok: false, error: 'Нет одобренных серверов' });
+
+    let synced = 0;
+    for (const srv of approved) {
+        const endpoints = [
+            `${srv.baseUrl}/api/products`,
+            `${srv.baseUrl}/products`,
+            `${srv.baseUrl}/hs/products`,
+            `${srv.baseUrl}/api/goods`,
+        ];
+        for (const url of endpoints) {
+            try {
+                const controller = new AbortController();
+                setTimeout(() => controller.abort(), 5000);
+                const r = await fetch(url, { signal: controller.signal });
+                if (r.ok) {
+                    const data = await r.json();
+                    const items = data.products || data.goods || data.data || (Array.isArray(data) ? data : []);
+                    for (const item of items) {
+                        const barcode = item.barcode || item.code || '';
+                        const existing = Array.from(products.values()).find(p => p.barcode === barcode);
+                        if (existing) {
+                            Object.assign(existing, { name: item.name || existing.name, price: item.price || existing.price, updatedAt: Date.now() });
+                        } else {
+                            const id = 'prod_' + (productIdCounter++);
+                            products.set(id, { id, name: item.name || 'Товар', price: item.price || 0, barcode, category: item.category || 'Прочее', unit: item.unit || 'шт', imageUrl: '', createdAt: Date.now(), updatedAt: Date.now(), source: srv.baseUrl });
+                        }
+                        synced++;
+                    }
+                    console.log(`📦 Synced ${items.length} products from ${url}`);
+                    break;
+                }
+            } catch {}
+        }
+    }
+    persistData();
+    res.json({ ok: true, synced, total: products.size });
+});
+
 // ─── Health check ────────────────────────────────────
 app.get('/health', (req, res) => res.json({
     status: 'ok',
@@ -813,6 +983,7 @@ if (saved) {
     if (saved.orders) { orders.clear(); saved.orders.forEach(([k,v]) => orders.set(k,v)); }
     if (saved.orderIdCounter) orderIdCounter = saved.orderIdCounter;
     if (saved.serverRegistry) { serverRegistry.clear(); saved.serverRegistry.forEach(([k,v]) => serverRegistry.set(k,v)); }
+    if (saved.loyaltyCards) { loyaltyCards.clear(); saved.loyaltyCards.forEach(([k,v]) => loyaltyCards.set(k,v)); }
     if (saved.promotions) { promotions.length = 0; promotions.push(...saved.promotions); }
     if (saved.promoIdCounter) promoIdCounter = saved.promoIdCounter;
     console.log(`✅ Restored: ${products.size} products, ${orders.size} orders, ${serverRegistry.size} servers, ${promocodes.size} promocodes`);
