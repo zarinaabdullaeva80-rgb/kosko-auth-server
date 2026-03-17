@@ -5,6 +5,44 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const path = require('path');
+const fs = require('fs');
+
+// ─── PERSISTENT STORAGE ──────────────────────────────
+// Saves all data to JSON file so it survives Render restarts
+const DATA_DIR = path.join(__dirname, 'data');
+const DATA_FILE = path.join(DATA_DIR, 'store.json');
+
+function persistData() {
+    try {
+        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+        const data = {
+            storeSettings,
+            products: Array.from(products.entries()),
+            productIdCounter,
+            banners,
+            bannerIdCounter,
+            promocodes: Array.from(promocodes.entries()),
+            orders: Array.from(orders.entries()),
+            orderIdCounter,
+            serverRegistry: Array.from(serverRegistry.entries()),
+            promotions,
+            promoIdCounter,
+            savedAt: Date.now(),
+        };
+        fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+        console.log('💾 Data persisted to disk');
+    } catch (e) { console.error('❌ Persist error:', e.message); }
+}
+
+function loadPersistedData() {
+    try {
+        if (!fs.existsSync(DATA_FILE)) return null;
+        const raw = fs.readFileSync(DATA_FILE, 'utf8');
+        const data = JSON.parse(raw);
+        console.log(`📂 Loaded persisted data (saved ${new Date(data.savedAt).toLocaleString()})`);
+        return data;
+    } catch (e) { console.error('❌ Load error:', e.message); return null; }
+}
 
 const app = express();
 app.use(cors());
@@ -441,9 +479,9 @@ app.post('/api/push/send', async (req, res) => {
 
 // ─── STORE SETTINGS (Phase 0.1) ─────────────────────
 // Controls delivery toggle, working hours, etc.
-const storeSettings = {
+let storeSettings = {
     deliveryEnabled: true,
-    freeDeliveryThreshold: 150000, // сум
+    freeDeliveryThreshold: 150000,
     deliveryFee: 10000,
     minOrderAmount: 20000,
     workingHours: { from: '08:00', to: '22:00' },
@@ -459,6 +497,7 @@ app.get('/api/settings', (req, res) => {
 app.post('/api/settings', (req, res) => {
     Object.assign(storeSettings, req.body, { updatedAt: Date.now() });
     console.log('⚙️ Settings updated:', JSON.stringify(storeSettings));
+    persistData();
     res.json({ ok: true, settings: storeSettings });
 });
 
@@ -467,6 +506,7 @@ app.post('/api/settings/delivery/toggle', (req, res) => {
     storeSettings.deliveryEnabled = !storeSettings.deliveryEnabled;
     storeSettings.updatedAt = Date.now();
     console.log(`🚚 Delivery ${storeSettings.deliveryEnabled ? 'ENABLED' : 'DISABLED'}`);
+    persistData();
     res.json({ ok: true, deliveryEnabled: storeSettings.deliveryEnabled });
 });
 
@@ -489,6 +529,7 @@ app.post('/api/products', (req, res) => {
     const id = 'prod_' + (productIdCounter++);
     const product = { id, name, price: Number(price), barcode: barcode || '', category: category || 'Прочее', unit: unit || 'шт', imageUrl: imageUrl || '', description: description || '', createdAt: Date.now(), updatedAt: Date.now() };
     products.set(id, product);
+    persistData();
     res.json({ ok: true, product });
 });
 
@@ -496,12 +537,14 @@ app.put('/api/products/:id', (req, res) => {
     const p = products.get(req.params.id);
     if (!p) return res.status(404).json({ error: 'Not found' });
     Object.assign(p, req.body, { updatedAt: Date.now() });
+    persistData();
     res.json({ ok: true, product: p });
 });
 
 app.delete('/api/products/:id', (req, res) => {
     if (!products.has(req.params.id)) return res.status(404).json({ error: 'Not found' });
     products.delete(req.params.id);
+    persistData();
     res.json({ ok: true });
 });
 
@@ -522,6 +565,7 @@ app.post('/api/products/sync', (req, res) => {
         }
     }
     console.log(`📦 Products sync: +${added} new, ~${updated} updated`);
+    persistData();
     res.json({ ok: true, added, updated, total: products.size });
 });
 
@@ -541,12 +585,14 @@ app.post('/api/banners', (req, res) => {
     const { title, imageUrl, linkScreen, linkParam, color } = req.body;
     const banner = { id: 'ban_' + (bannerIdCounter++), title: title || '', imageUrl: imageUrl || '', linkScreen: linkScreen || '', linkParam: linkParam || '', color: color || '#6C63FF', active: true, createdAt: Date.now() };
     banners.push(banner);
+    persistData();
     res.json({ ok: true, banner });
 });
 app.delete('/api/banners/:id', (req, res) => {
     const idx = banners.findIndex(b => b.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: 'Not found' });
     banners[idx].active = false;
+    persistData();
     res.json({ ok: true });
 });
 
@@ -561,6 +607,7 @@ app.post('/api/promocodes', (req, res) => {
     if (!code) return res.status(400).json({ error: 'code required' });
     const promo = { code: code.toUpperCase(), discountPercent: discountPercent || 0, discountAmount: discountAmount || 0, minOrder: minOrder || 0, expiresAt: expiresAt || null, usageLimit: usageLimit || 999, usageCount: 0, active: true, createdAt: Date.now() };
     promocodes.set(promo.code, promo);
+    persistData();
     res.json({ ok: true, promo });
 });
 app.post('/api/promocodes/verify', (req, res) => {
@@ -572,12 +619,14 @@ app.post('/api/promocodes/verify', (req, res) => {
     if (orderAmount && orderAmount < promo.minOrder) return res.json({ valid: false, reason: `Минимальная сумма: ${promo.minOrder.toLocaleString('ru')} сўм` });
     promo.usageCount++;
     const discount = promo.discountPercent ? Math.floor(orderAmount * promo.discountPercent / 100) : promo.discountAmount;
+    persistData();
     res.json({ valid: true, discount, promo });
 });
 app.delete('/api/promocodes/:code', (req, res) => {
     const promo = promocodes.get(req.params.code.toUpperCase());
     if (!promo) return res.status(404).json({ error: 'Not found' });
     promo.active = false;
+    persistData();
     res.json({ ok: true });
 });
 
@@ -591,12 +640,14 @@ app.post('/api/promotions', (req, res) => {
     const { title, description, imageUrl, discountPercent, expiresAt } = req.body;
     const promo = { id: 'prom_' + (promoIdCounter++), title, description: description || '', imageUrl: imageUrl || '', discountPercent: discountPercent || 0, expiresAt: expiresAt || null, active: true, createdAt: Date.now() };
     promotions.push(promo);
+    persistData();
     res.json({ ok: true, promotion: promo });
 });
 app.delete('/api/promotions/:id', (req, res) => {
     const p = promotions.find(x => x.id === req.params.id);
     if (!p) return res.status(404).json({ error: 'Not found' });
     p.active = false;
+    persistData();
     res.json({ ok: true });
 });
 
@@ -625,6 +676,7 @@ app.post('/api/orders', (req, res) => {
     };
     orders.set(id, order);
     console.log(`📦 New order ${id}: ${order.delivery}, ${order.total} сўм, ${order.items.length} items`);
+    persistData();
     res.json({ ok: true, order });
 });
 
@@ -643,6 +695,7 @@ app.patch('/api/orders/:id/status', (req, res) => {
     order.status = req.body.status || order.status;
     order.updatedAt = Date.now();
     console.log(`📦 Order ${order.id} → ${order.status}`);
+    persistData();
     res.json({ ok: true, order });
 });
 
@@ -682,6 +735,7 @@ app.post('/api/registry/report', (req, res) => {
 
     serverRegistry.set(id, record);
     console.log(`📡 Server reported: ${baseUrl} [${record.status}] (seen ${record.seenCount}x)`);
+    persistData();
     res.json({ ok: true, id, status: record.status, syncEnabled: record.syncEnabled });
 });
 
@@ -707,6 +761,7 @@ app.post('/api/registry/servers/:id/approve', (req, res) => {
     server.syncEnabled = true;
     server.notes = req.body.notes || server.notes;
     console.log(`✅ Server approved for sync: ${server.baseUrl}`);
+    persistData();
     res.json({ ok: true, server });
 });
 
@@ -716,6 +771,7 @@ app.post('/api/registry/servers/:id/reject', (req, res) => {
     if (!server) return res.status(404).json({ error: 'Not found' });
     server.status = 'rejected';
     server.syncEnabled = false;
+    persistData();
     res.json({ ok: true, server });
 });
 
@@ -745,6 +801,23 @@ app.get('/health', (req, res) => res.json({
 app.get('/', (req, res) => res.json({ service: 'KOSKO Full Platform', version: '2.1', status: 'running' }));
 
 // ─── Start ───────────────────────────────────────────
+// Restore persisted data from disk before starting
+const saved = loadPersistedData();
+if (saved) {
+    if (saved.storeSettings) Object.assign(storeSettings, saved.storeSettings);
+    if (saved.products) { products.clear(); saved.products.forEach(([k,v]) => products.set(k,v)); }
+    if (saved.productIdCounter) productIdCounter = saved.productIdCounter;
+    if (saved.banners) { banners.length = 0; banners.push(...saved.banners); }
+    if (saved.bannerIdCounter) bannerIdCounter = saved.bannerIdCounter;
+    if (saved.promocodes) { promocodes.clear(); saved.promocodes.forEach(([k,v]) => promocodes.set(k,v)); }
+    if (saved.orders) { orders.clear(); saved.orders.forEach(([k,v]) => orders.set(k,v)); }
+    if (saved.orderIdCounter) orderIdCounter = saved.orderIdCounter;
+    if (saved.serverRegistry) { serverRegistry.clear(); saved.serverRegistry.forEach(([k,v]) => serverRegistry.set(k,v)); }
+    if (saved.promotions) { promotions.length = 0; promotions.push(...saved.promotions); }
+    if (saved.promoIdCounter) promoIdCounter = saved.promoIdCounter;
+    console.log(`✅ Restored: ${products.size} products, ${orders.size} orders, ${serverRegistry.size} servers, ${promocodes.size} promocodes`);
+}
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 KOSKO Auth Server on port ${PORT}`);
     fetch(`https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook`)
