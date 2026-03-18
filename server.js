@@ -50,6 +50,27 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Diagnostic: check admin.html content on server
+app.get('/api/debug/admin-html', (req, res) => {
+    const fs = require('fs');
+    const filePath = path.join(__dirname, 'public', 'admin.html');
+    try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        res.json({
+            fileSize: content.length,
+            lines: content.split('\n').length,
+            has_loyalty_cards_tbody: content.includes('loyalty-cards-tbody'),
+            has_csv_loyalty_file: content.includes('csv-loyalty-file'),
+            has_addLoyaltyCard: content.includes('addLoyaltyCard'),
+            has_loadLoyaltyCards: content.includes('loadLoyaltyCards'),
+            has_importLoyaltyCSV: content.includes('importLoyaltyCSV'),
+            has_build_marker: content.includes('build:20260318'),
+            has_showToast: content.includes('showToast'),
+            last100chars: content.slice(-100),
+        });
+    } catch(e) { res.json({ error: e.message }); }
+});
+
 // ─── ADMIN AUTH ──────────────────────────────────────
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'kosko2026';
