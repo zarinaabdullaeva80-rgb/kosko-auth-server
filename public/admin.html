@@ -1544,12 +1544,51 @@
                     <button class="btn btn-primary" onclick="saveLoyalty()">💾 Сохранить настройки</button>
                 </div>
                 <div class="divider"></div>
-                <!-- Loyalty Cards from Servers -->
+
+                <!-- Add Card Form -->
+                <div class="card-box" style="padding:20px;margin-bottom:16px">
+                    <div class="card-box-title" style="margin-bottom:12px">➕ Добавить карту лояльности</div>
+                    <div class="form-grid" style="gap:10px">
+                        <div class="form-group"><label>Телефон</label><input id="lc-phone" placeholder="998901234567"></div>
+                        <div class="form-group"><label>Имя клиента</label><input id="lc-name" placeholder="Иванов Иван"></div>
+                        <div class="form-group"><label>Начальный баланс (баллов)</label><input id="lc-balance" type="number" value="0"></div>
+                        <div class="form-group"><label>Уровень</label>
+                            <select id="lc-level">
+                                <option>Стандарт</option>
+                                <option>Серебро</option>
+                                <option>Золото</option>
+                                <option>Платинум</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" style="margin-top:12px" onclick="addLoyaltyCard()">💳 Добавить карту</button>
+                </div>
+
+                <!-- CSV Import -->
+                <div class="card-box" style="padding:20px;margin-bottom:16px">
+                    <div class="card-box-title" style="margin-bottom:8px">📥 Импорт из 1С (CSV/Excel)</div>
+                    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+                        Выгрузите из 1С:Предприятие список клиентов в CSV. Формат: <b>телефон;имя;баланс</b> (разделитель — точка с запятой)
+                    </div>
+                    <div style="background:#0a0a14;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;color:#a78bfa;margin-bottom:12px;font-family:monospace">
+                        998901234567;Иванов Иван;500<br>
+                        998907654321;Петрова Мария;1200<br>
+                        998933001122;Сидоров Алексей;0
+                    </div>
+                    <input type="file" id="csv-loyalty-file" accept=".csv,.txt,.xls,.xlsx" style="display:none" onchange="importLoyaltyCSV(event)">
+                    <div style="display:flex;gap:8px">
+                        <button class="btn btn-primary btn-sm" onclick="document.getElementById('csv-loyalty-file').click()">📂 Загрузить CSV файл</button>
+                        <button class="btn btn-ghost btn-sm" onclick="exportLoyaltyCSV()">📤 Экспорт в CSV</button>
+                    </div>
+                    <div id="csv-import-status" style="margin-top:8px;font-size:11px;color:var(--muted);display:none"></div>
+                </div>
+
+                <!-- Loyalty Cards Table -->
                 <div class="card-box">
                     <div class="card-box-header">
                         <span class="card-box-title">💳 Карты лояльности</span>
                         <div style="display:flex;gap:8px">
-                            <button class="btn btn-primary btn-sm" onclick="syncLoyaltyFromServers()">🔄 Синхронизировать с сервером</button>
+                            <button class="btn btn-primary btn-sm" onclick="syncLoyaltyFromServers()">🔄 Синхр. с сервером</button>
                             <button class="btn btn-ghost btn-sm" onclick="loadLoyaltyCards()">Обновить</button>
                         </div>
                     </div>
@@ -1562,12 +1601,12 @@
                                 <th>Баланс</th>
                                 <th>Уровень</th>
                                 <th>Потрачено</th>
-                                <th>Источник</th>
                                 <th>Обновлён</th>
+                                <th>Действие</th>
                             </tr>
                         </thead>
                         <tbody id="loyalty-cards-tbody">
-                            <tr><td colspan="7" class="empty-state">Нажмите «Синхронизировать» для загрузки карт с серверов магазинов</td></tr>
+                            <tr><td colspan="7" class="empty-state">Добавьте карту или загрузите CSV из 1С</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -2353,6 +2392,25 @@
         }
 
         // ─── LOYALTY CARDS ───────────────────────────────
+        async function addLoyaltyCard() {
+            const phone = document.getElementById('lc-phone').value.replace(/\D/g, '');
+            const name = document.getElementById('lc-name').value;
+            const balance = Number(document.getElementById('lc-balance').value) || 0;
+            const level = document.getElementById('lc-level').value;
+            if (!phone || phone.length < 9) { showToast('❌ Введите корректный номер телефона'); return; }
+            try {
+                const res = await fetch('/api/loyalty', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ phone, name, balance, level }) });
+                const data = await res.json();
+                if (data.ok) {
+                    showToast(`✅ Карта ${phone} создана!`);
+                    document.getElementById('lc-phone').value = '';
+                    document.getElementById('lc-name').value = '';
+                    document.getElementById('lc-balance').value = '0';
+                    loadLoyaltyCards();
+                } else { showToast('❌ ' + (data.error || 'Ошибка')); }
+            } catch(e) { showToast('❌ ' + e.message); }
+        }
+
         async function loadLoyaltyCards() {
             const tb = document.getElementById('loyalty-cards-tbody');
             tb.innerHTML = '<tr><td colspan="7" class="empty-state">Загрузка...</td></tr>';
@@ -2360,7 +2418,7 @@
                 const res = await fetch('/api/loyalty');
                 const data = await res.json();
                 const cards = data.cards || [];
-                if (!cards.length) { tb.innerHTML = '<tr><td colspan="7" class="empty-state">Карт пока нет. Нажмите «Синхронизировать» для загрузки с серверов магазинов.</td></tr>'; return; }
+                if (!cards.length) { tb.innerHTML = '<tr><td colspan="7" class="empty-state">Карт пока нет. Добавьте вручную или загрузите CSV из 1С.</td></tr>'; return; }
                 const LEVEL_BADGE = { 'Стандарт': 'badge-pending', 'Серебро': 'badge-silver', 'Золото': 'badge-gold', 'Платинум': 'badge-active' };
                 tb.innerHTML = cards.map(c => {
                     const d = new Date(c.updatedAt);
@@ -2371,11 +2429,82 @@
                         <td style="font-weight:700;color:var(--violet)">${Number(c.balance).toLocaleString('ru')} баллов</td>
                         <td><span class="badge ${LEVEL_BADGE[c.level] || 'badge-pending'}">${c.level}</span></td>
                         <td>${Number(c.totalSpent || 0).toLocaleString('ru')} сўм</td>
-                        <td style="font-size:11px;color:var(--muted)">${c.source || 'cloud'}</td>
                         <td style="font-size:11px;color:var(--muted)">${dateStr}</td>
+                        <td>
+                            <button class="btn btn-ghost btn-sm" onclick="loyaltyAddPoints('${c.phone}')" style="font-size:10px;padding:4px 8px">+⭐</button>
+                            <button class="btn btn-ghost btn-sm" onclick="loyaltySpendPoints('${c.phone}')" style="font-size:10px;padding:4px 8px">-⭐</button>
+                        </td>
                     </tr>`;
                 }).join('');
             } catch(e) { tb.innerHTML = `<tr><td colspan="7" class="empty-state">Ошибка: ${e.message}</td></tr>`; }
+        }
+
+        async function loyaltyAddPoints(phone) {
+            const amount = prompt('Сколько баллов начислить?');
+            if (!amount || isNaN(amount)) return;
+            const reason = prompt('Причина (необязательно):', 'Начисление');
+            try {
+                const res = await fetch(`/api/loyalty/${phone}/add`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ amount: Number(amount), reason }) });
+                const data = await res.json();
+                if (data.ok) { showToast(`✅ +${amount} баллов → ${phone}`); loadLoyaltyCards(); }
+            } catch(e) { showToast('❌ ' + e.message); }
+        }
+
+        async function loyaltySpendPoints(phone) {
+            const amount = prompt('Сколько баллов списать?');
+            if (!amount || isNaN(amount)) return;
+            const reason = prompt('Причина (необязательно):', 'Списание');
+            try {
+                const res = await fetch(`/api/loyalty/${phone}/spend`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ amount: Number(amount), reason }) });
+                const data = await res.json();
+                if (data.ok) { showToast(`✅ -${amount} баллов → ${phone}`); loadLoyaltyCards(); }
+                else { showToast(`❌ ${data.error || 'Ошибка'} (баланс: ${data.balance})`); }
+            } catch(e) { showToast('❌ ' + e.message); }
+        }
+
+        async function importLoyaltyCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const statusEl = document.getElementById('csv-import-status');
+            statusEl.style.display = 'block';
+            statusEl.textContent = '⏳ Импортируется...';
+            const text = await file.text();
+            const lines = text.split(/\r?\n/).filter(l => l.trim());
+            let imported = 0, errors = 0;
+            for (const line of lines) {
+                // Support both ; and , separators, skip header if present
+                const parts = line.includes(';') ? line.split(';') : line.split(',');
+                const phone = (parts[0] || '').replace(/\D/g, '');
+                if (!phone || phone.length < 9 || phone === 'телефон' || phone === 'phone') continue;
+                const name = (parts[1] || '').trim();
+                const balance = Number(parts[2]) || 0;
+                try {
+                    const res = await fetch('/api/loyalty', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ phone, name, balance }) });
+                    const data = await res.json();
+                    if (data.ok) imported++; else errors++;
+                } catch { errors++; }
+            }
+            statusEl.innerHTML = `<span style="color:var(--green)">✅ Импортировано: ${imported} карт</span>${errors ? ` <span style="color:var(--danger)">(ошибок: ${errors})</span>` : ''}`;
+            showToast(`📥 Импортировано ${imported} карт лояльности`);
+            loadLoyaltyCards();
+            event.target.value = '';
+        }
+
+        async function exportLoyaltyCSV() {
+            try {
+                const res = await fetch('/api/loyalty');
+                const data = await res.json();
+                const cards = data.cards || [];
+                if (!cards.length) { showToast('❌ Нет карт для экспорта'); return; }
+                let csv = 'Телефон;Имя;Баланс;Уровень;Потрачено\n';
+                cards.forEach(c => { csv += `${c.phone};${c.name || ''};${c.balance};${c.level};${c.totalSpent || 0}\n`; });
+                const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `kosko_loyalty_${new Date().toISOString().slice(0,10)}.csv`;
+                a.click();
+                showToast(`📤 Экспортировано ${cards.length} карт`);
+            } catch(e) { showToast('❌ ' + e.message); }
         }
 
         async function syncLoyaltyFromServers() {
