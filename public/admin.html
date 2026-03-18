@@ -2397,18 +2397,18 @@
             const name = document.getElementById('lc-name').value;
             const balance = Number(document.getElementById('lc-balance').value) || 0;
             const level = document.getElementById('lc-level').value;
-            if (!phone || phone.length < 9) { showToast('❌ Введите корректный номер телефона'); return; }
+            if (!phone || phone.length < 9) { toast('❌ Введите корректный номер телефона'); return; }
             try {
                 const res = await fetch('/api/loyalty', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ phone, name, balance, level }) });
                 const data = await res.json();
                 if (data.ok) {
-                    showToast(`✅ Карта ${phone} создана!`);
+                    toast(`✅ Карта ${phone} создана!`);
                     document.getElementById('lc-phone').value = '';
                     document.getElementById('lc-name').value = '';
                     document.getElementById('lc-balance').value = '0';
                     loadLoyaltyCards();
-                } else { showToast('❌ ' + (data.error || 'Ошибка')); }
-            } catch(e) { showToast('❌ ' + e.message); }
+                } else { toast('❌ ' + (data.error || 'Ошибка')); }
+            } catch(e) { toast('❌ ' + e.message); }
         }
 
         async function loadLoyaltyCards() {
@@ -2446,8 +2446,8 @@
             try {
                 const res = await fetch(`/api/loyalty/${phone}/add`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ amount: Number(amount), reason }) });
                 const data = await res.json();
-                if (data.ok) { showToast(`✅ +${amount} баллов → ${phone}`); loadLoyaltyCards(); }
-            } catch(e) { showToast('❌ ' + e.message); }
+                if (data.ok) { toast(`✅ +${amount} баллов → ${phone}`); loadLoyaltyCards(); }
+            } catch(e) { toast('❌ ' + e.message); }
         }
 
         async function loyaltySpendPoints(phone) {
@@ -2457,9 +2457,9 @@
             try {
                 const res = await fetch(`/api/loyalty/${phone}/spend`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ amount: Number(amount), reason }) });
                 const data = await res.json();
-                if (data.ok) { showToast(`✅ -${amount} баллов → ${phone}`); loadLoyaltyCards(); }
-                else { showToast(`❌ ${data.error || 'Ошибка'} (баланс: ${data.balance})`); }
-            } catch(e) { showToast('❌ ' + e.message); }
+                if (data.ok) { toast(`✅ -${amount} баллов → ${phone}`); loadLoyaltyCards(); }
+                else { toast(`❌ ${data.error || 'Ошибка'} (баланс: ${data.balance})`); }
+            } catch(e) { toast('❌ ' + e.message); }
         }
 
         async function importLoyaltyCSV(event) {
@@ -2485,7 +2485,7 @@
                 } catch { errors++; }
             }
             statusEl.innerHTML = `<span style="color:var(--green)">✅ Импортировано: ${imported} карт</span>${errors ? ` <span style="color:var(--danger)">(ошибок: ${errors})</span>` : ''}`;
-            showToast(`📥 Импортировано ${imported} карт лояльности`);
+            toast(`📥 Импортировано ${imported} карт лояльности`);
             loadLoyaltyCards();
             event.target.value = '';
         }
@@ -2495,7 +2495,7 @@
                 const res = await fetch('/api/loyalty');
                 const data = await res.json();
                 const cards = data.cards || [];
-                if (!cards.length) { showToast('❌ Нет карт для экспорта'); return; }
+                if (!cards.length) { toast('❌ Нет карт для экспорта'); return; }
                 let csv = 'Телефон;Имя;Баланс;Уровень;Потрачено\n';
                 cards.forEach(c => { csv += `${c.phone};${c.name || ''};${c.balance};${c.level};${c.totalSpent || 0}\n`; });
                 const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
@@ -2503,8 +2503,8 @@
                 a.href = URL.createObjectURL(blob);
                 a.download = `kosko_loyalty_${new Date().toISOString().slice(0,10)}.csv`;
                 a.click();
-                showToast(`📤 Экспортировано ${cards.length} карт`);
-            } catch(e) { showToast('❌ ' + e.message); }
+                toast(`📤 Экспортировано ${cards.length} карт`);
+            } catch(e) { toast('❌ ' + e.message); }
         }
 
         async function syncLoyaltyFromServers() {
@@ -2516,7 +2516,7 @@
                 const data = await res.json();
                 if (data.ok) {
                     status.innerHTML = `<span style="color:var(--green)">✅ Синхронизировано ${data.synced} карт. Всего: ${data.total}</span>`;
-                    showToast(`⭐ Загружено ${data.synced} карт лояльности`);
+                    toast(`⭐ Загружено ${data.synced} карт лояльности`);
                     loadLoyaltyCards();
                 } else {
                     status.innerHTML = `<span style="color:var(--danger)">⚠️ ${data.error || 'Ошибка синхронизации'}</span>`;
