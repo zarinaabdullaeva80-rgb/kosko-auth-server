@@ -26,6 +26,7 @@ function persistData() {
             orderIdCounter,
             serverRegistry: Array.from(serverRegistry.entries()),
             loyaltyCards: Array.from(loyaltyCards.entries()),
+            loyaltyConfig,
             promotions,
             promoIdCounter,
             savedAt: Date.now(),
@@ -296,14 +297,106 @@ app.post('/api/chat/admin/reply', (req, res) => {
 // ─── LOYALTY CARD API ────────────────────────────────
 const loyaltyCards = new Map();
 const LEVELS = [
-    { name: 'bronze', min: 0, cashback: 3 },
-    { name: 'silver', min: 1000, cashback: 5 },
-    { name: 'gold', min: 5000, cashback: 7 },
-    { name: 'platinum', min: 15000, cashback: 10 },
+    { name: 'Стандарт', min: 0, cashback: 3 },
+    { name: 'Серебро', min: 1000, cashback: 5 },
+    { name: 'Золото', min: 5000, cashback: 7 },
+    { name: 'Платинум', min: 15000, cashback: 10 },
 ];
 
-function calcLevel(balance) {
-    return [...LEVELS].reverse().find(l => balance >= l.min) || LEVELS[0];
+// Loyalty config (editable from admin panel)
+let loyaltyConfig = {
+    activationThreshold: 50000,  // Min purchase total (сўм) to auto-activate card
+    pointsRate: 100,             // 1 point = 100 сўм
+    autoActivate: true,          // Automatically create card after threshold
+    autoCashback: true,          // Auto-accrue cashback on order/payment
+};
+
+function calcLevel(totalSpent) {
+    return [...LEVELS].reverse().find(l => totalSpent >= l.min) || LEVELS[0];
+}
+
+// Auto-process loyalty: activate card & accrue cashback
+function autoProcessLoyalty(phone, purchaseAmount, reason) {
+    if (!phone) return null;
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length < 9) return null;
+
+    let card = loyaltyCards.get(cleanPhone);
+    const amount = Number(purchaseAmount) || 0;
+
+    // --- AUTO-ACTIVATE: Create card if purchase threshold reached ---
+    if (!card && loyaltyConfig.autoActivate) {
+        // Check cumulative spending from orders
+        let totalSpent = 0;
+        for (const [, order] of orders) {
+            const orderPhone = (order.phone || '').replace(/\D/g, '');
+            if (orderPhone === cleanPhone && (order.status === 'delivered' || order.status === 'paid')) {
+                totalSpent += Number(order.total) || 0;
+            }
+        }
+        totalSpent += amount; // include current purchase
+
+        if (totalSpent >= loyaltyConfig.activationThreshold) {
+            const level = calcLevel(0);
+            card = {
+                phone: cleanPhone,
+                name: '',
+                balance: 0,
+                level: level.name,
+                totalSpent: 0,
+                transactions: [],
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                autoActivated: true,
+            };
+            loyaltyCards.set(cleanPhone, card);
+            console.log(`💳 AUTO-ACTIVATED card for ${cleanPhone} (spent: ${totalSpent} сўм, threshold: ${loyaltyConfig.activationThreshold})`);
+        }
+    }
+
+    if (!card) return null;
+
+    // --- AUTO-CASHBACK: Accrue bonus points ---
+    if (loyaltyConfig.autoCashback && amount > 0) {
+        const level = calcLevel(card.totalSpent || 0);
+        const cashbackPercent = level.cashback;
+        const pointsEarned = Math.floor(amount * cashbackPercent / 100);
+
+        if (pointsEarned > 0) {
+            card.balance = (card.balance || 0) + pointsEarned;
+            card.totalSpent = (card.totalSpent || 0) + amount;
+            card.transactions.push({
+                type: 'cashback',
+                amount: pointsEarned,
+                purchaseAmount: amount,
+                cashbackPercent,
+                reason: reason || 'Авто-кешбек',
+                date: Date.now(),
+            });
+
+            // Auto-upgrade level
+            const newLevel = calcLevel(card.totalSpent);
+            if (newLevel.name !== card.level) {
+                const oldLevel = card.level;
+                card.level = newLevel.name;
+                card.transactions.push({
+                    type: 'level_up',
+                    from: oldLevel,
+                    to: newLevel.name,
+                    reason: `Повышение уровня: ${oldLevel} → ${newLevel.name}`,
+                    date: Date.now(),
+                });
+                console.log(`🏅 LEVEL UP: ${cleanPhone} ${oldLevel} → ${newLevel.name}`);
+            }
+
+            card.updatedAt = Date.now();
+            loyaltyCards.set(cleanPhone, card);
+            persistData();
+            console.log(`⭐ AUTO-CASHBACK: +${pointsEarned} pts for ${cleanPhone} (${cashbackPercent}% of ${amount} сўм)`);
+        }
+    }
+
+    return card;
 }
 
 // Register new loyalty card
@@ -693,11 +786,53 @@ app.get('/api/orders', (req, res) => {
 app.patch('/api/orders/:id/status', (req, res) => {
     const order = orders.get(req.params.id);
     if (!order) return res.status(404).json({ error: 'Order not found' });
+    const oldStatus = order.status;
     order.status = req.body.status || order.status;
     order.updatedAt = Date.now();
     console.log(`📦 Order ${order.id} → ${order.status}`);
+
+    // AUTO-CASHBACK: when order is delivered or paid
+    if ((order.status === 'delivered' || order.status === 'paid') && oldStatus !== order.status) {
+        const loyaltyResult = autoProcessLoyalty(order.phone, order.total, `Заказ ${order.id}`);
+        if (loyaltyResult) {
+            console.log(`⭐ Loyalty processed for order ${order.id}: ${order.phone}`);
+        }
+    }
+
     persistData();
     res.json({ ok: true, order });
+});
+
+// Payment confirmation (in-store or online) — triggers cashback
+app.post('/api/payment/confirm', (req, res) => {
+    const { phone, amount, receiptId, source } = req.body;
+    if (!phone || !amount) return res.status(400).json({ error: 'phone and amount required' });
+    const loyaltyResult = autoProcessLoyalty(phone, amount, `Оплата ${source || 'магазин'}${receiptId ? ' чек ' + receiptId : ''}`);
+    if (loyaltyResult) {
+        res.json({ ok: true, card: loyaltyResult, message: `Начислено баллов: кешбек от ${amount} сўм` });
+    } else {
+        // Check if threshold not yet reached
+        const cleanPhone = phone.replace(/\D/g, '');
+        let totalSpent = Number(amount) || 0;
+        for (const [, order] of orders) {
+            if ((order.phone || '').replace(/\D/g, '') === cleanPhone && (order.status === 'delivered' || order.status === 'paid')) {
+                totalSpent += Number(order.total) || 0;
+            }
+        }
+        res.json({ ok: false, message: `Карта ещё не активирована. Потрачено: ${totalSpent} из ${loyaltyConfig.activationThreshold} сўм` });
+    }
+});
+
+// Loyalty config API
+app.get('/api/loyalty/config', (req, res) => {
+    res.json(loyaltyConfig);
+});
+
+app.post('/api/loyalty/config', (req, res) => {
+    Object.assign(loyaltyConfig, req.body);
+    persistData();
+    console.log('⚙️ Loyalty config updated:', JSON.stringify(loyaltyConfig));
+    res.json({ ok: true, config: loyaltyConfig });
 });
 
 // ─── SERVER REGISTRY ─────────────────────────────────
@@ -984,6 +1119,7 @@ if (saved) {
     if (saved.orderIdCounter) orderIdCounter = saved.orderIdCounter;
     if (saved.serverRegistry) { serverRegistry.clear(); saved.serverRegistry.forEach(([k,v]) => serverRegistry.set(k,v)); }
     if (saved.loyaltyCards) { loyaltyCards.clear(); saved.loyaltyCards.forEach(([k,v]) => loyaltyCards.set(k,v)); }
+    if (saved.loyaltyConfig) Object.assign(loyaltyConfig, saved.loyaltyConfig);
     if (saved.promotions) { promotions.length = 0; promotions.push(...saved.promotions); }
     if (saved.promoIdCounter) promoIdCounter = saved.promoIdCounter;
     console.log(`✅ Restored: ${products.size} products, ${orders.size} orders, ${serverRegistry.size} servers, ${promocodes.size} promocodes`);
