@@ -7,43 +7,75 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 
-// ─── PERSISTENT STORAGE ──────────────────────────────
-// Saves all data to JSON file so it survives Render restarts
-const DATA_DIR = path.join(__dirname, 'data');
-const DATA_FILE = path.join(DATA_DIR, 'store.json');
+// ─── PERSISTENT STORAGE (PostgreSQL) ─────────────────
+const { Pool } = require('pg');
 
-function persistData() {
-    try {
-        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-        const data = {
-            storeSettings,
-            products: Array.from(products.entries()),
-            productIdCounter,
-            banners,
-            bannerIdCounter,
-            promocodes: Array.from(promocodes.entries()),
-            orders: Array.from(orders.entries()),
-            orderIdCounter,
-            serverRegistry: Array.from(serverRegistry.entries()),
-            loyaltyCards: Array.from(loyaltyCards.entries()),
-            loyaltyConfig,
-            promotions,
-            promoIdCounter,
-            savedAt: Date.now(),
-        };
-        fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-        console.log('💾 Data persisted to disk');
-    } catch (e) { console.error('❌ Persist error:', e.message); }
+const pool = process.env.DATABASE_URL
+    ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+    : null;
+
+async function initDB() {
+    if (!pool) { console.log('⚠️ No DATABASE_URL — using in-memory only'); return; }
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS kv_store (
+            key TEXT PRIMARY KEY,
+            value JSONB NOT NULL,
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    `);
+    console.log('🗄️ PostgreSQL connected, kv_store table ready');
 }
 
-function loadPersistedData() {
+async function dbGet(key) {
+    if (!pool) return null;
+    const { rows } = await pool.query('SELECT value FROM kv_store WHERE key = $1', [key]);
+    return rows[0]?.value || null;
+}
+
+async function dbSet(key, value) {
+    if (!pool) return;
+    await pool.query(
+        `INSERT INTO kv_store (key, value, updated_at)
+         VALUES ($1, $2::jsonb, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $2::jsonb, updated_at = NOW()`,
+        [key, JSON.stringify(value)]
+    );
+}
+
+function persistData() {
+    if (!pool) return;
+    Promise.all([
+        dbSet('storeSettings', storeSettings),
+        dbSet('products', Array.from(products.entries())),
+        dbSet('productIdCounter', productIdCounter),
+        dbSet('banners', banners),
+        dbSet('bannerIdCounter', bannerIdCounter),
+        dbSet('promocodes', Array.from(promocodes.entries())),
+        dbSet('orders', Array.from(orders.entries())),
+        dbSet('orderIdCounter', orderIdCounter),
+        dbSet('serverRegistry', Array.from(serverRegistry.entries())),
+        dbSet('loyaltyCards', Array.from(loyaltyCards.entries())),
+        dbSet('loyaltyConfig', loyaltyConfig),
+        dbSet('promotions', promotions),
+        dbSet('promoIdCounter', promoIdCounter),
+    ]).then(() => console.log('💾 Data persisted to PostgreSQL'))
+      .catch(e => console.error('❌ Persist error:', e.message));
+}
+
+async function loadPersistedData() {
+    if (!pool) return null;
     try {
-        if (!fs.existsSync(DATA_FILE)) return null;
-        const raw = fs.readFileSync(DATA_FILE, 'utf8');
-        const data = JSON.parse(raw);
-        console.log(`📂 Loaded persisted data (saved ${new Date(data.savedAt).toLocaleString()})`);
-        return data;
-    } catch (e) { console.error('❌ Load error:', e.message); return null; }
+        const keys = ['storeSettings','products','productIdCounter','banners','bannerIdCounter',
+                       'promocodes','orders','orderIdCounter','serverRegistry',
+                       'loyaltyCards','loyaltyConfig','promotions','promoIdCounter'];
+        const result = {};
+        for (const key of keys) {
+            result[key] = await dbGet(key);
+        }
+        if (!result.storeSettings && !result.products) return null;
+        console.log('📂 Loaded persisted data from PostgreSQL');
+        return result;
+    } catch (e) { console.error('❌ DB Load error:', e.message); return null; }
 }
 
 const app = express();
@@ -1148,28 +1180,33 @@ app.get('/health', (req, res) => res.json({
 app.get('/', (req, res) => res.json({ service: 'KOSKO Full Platform', version: '2.1', status: 'running' }));
 
 // ─── Start ───────────────────────────────────────────
-// Restore persisted data from disk before starting
-const saved = loadPersistedData();
-if (saved) {
-    if (saved.storeSettings) Object.assign(storeSettings, saved.storeSettings);
-    if (saved.products) { products.clear(); saved.products.forEach(([k,v]) => products.set(k,v)); }
-    if (saved.productIdCounter) productIdCounter = saved.productIdCounter;
-    if (saved.banners) { banners.length = 0; banners.push(...saved.banners); }
-    if (saved.bannerIdCounter) bannerIdCounter = saved.bannerIdCounter;
-    if (saved.promocodes) { promocodes.clear(); saved.promocodes.forEach(([k,v]) => promocodes.set(k,v)); }
-    if (saved.orders) { orders.clear(); saved.orders.forEach(([k,v]) => orders.set(k,v)); }
-    if (saved.orderIdCounter) orderIdCounter = saved.orderIdCounter;
-    if (saved.serverRegistry) { serverRegistry.clear(); saved.serverRegistry.forEach(([k,v]) => serverRegistry.set(k,v)); }
-    if (saved.loyaltyCards) { loyaltyCards.clear(); saved.loyaltyCards.forEach(([k,v]) => loyaltyCards.set(k,v)); }
-    if (saved.loyaltyConfig) Object.assign(loyaltyConfig, saved.loyaltyConfig);
-    if (saved.promotions) { promotions.length = 0; promotions.push(...saved.promotions); }
-    if (saved.promoIdCounter) promoIdCounter = saved.promoIdCounter;
-    console.log(`✅ Restored: ${products.size} products, ${orders.size} orders, ${serverRegistry.size} servers, ${promocodes.size} promocodes`);
+async function startServer() {
+    // Initialize PostgreSQL and restore data
+    await initDB();
+    const saved = await loadPersistedData();
+    if (saved) {
+        if (saved.storeSettings) Object.assign(storeSettings, saved.storeSettings);
+        if (saved.products) { products.clear(); saved.products.forEach(([k,v]) => products.set(k,v)); }
+        if (saved.productIdCounter) productIdCounter = saved.productIdCounter;
+        if (saved.banners) { banners.length = 0; banners.push(...saved.banners); }
+        if (saved.bannerIdCounter) bannerIdCounter = saved.bannerIdCounter;
+        if (saved.promocodes) { promocodes.clear(); saved.promocodes.forEach(([k,v]) => promocodes.set(k,v)); }
+        if (saved.orders) { orders.clear(); saved.orders.forEach(([k,v]) => orders.set(k,v)); }
+        if (saved.orderIdCounter) orderIdCounter = saved.orderIdCounter;
+        if (saved.serverRegistry) { serverRegistry.clear(); saved.serverRegistry.forEach(([k,v]) => serverRegistry.set(k,v)); }
+        if (saved.loyaltyCards) { loyaltyCards.clear(); saved.loyaltyCards.forEach(([k,v]) => loyaltyCards.set(k,v)); }
+        if (saved.loyaltyConfig) Object.assign(loyaltyConfig, saved.loyaltyConfig);
+        if (saved.promotions) { promotions.length = 0; promotions.push(...saved.promotions); }
+        if (saved.promoIdCounter) promoIdCounter = saved.promoIdCounter;
+        console.log(`✅ Restored: ${products.size} products, ${orders.size} orders, ${serverRegistry.size} servers, ${loyaltyCards.size} loyalty cards`);
+    }
+
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 KOSKO Auth Server on port ${PORT}`);
+        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook`)
+            .then(() => { console.log('🤖 Bot polling started'); pollTelegram(); })
+            .catch(() => pollTelegram());
+    });
 }
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 KOSKO Auth Server on port ${PORT}`);
-    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook`)
-        .then(() => { console.log('🤖 Bot polling started'); pollTelegram(); })
-        .catch(() => pollTelegram());
-});
+startServer().catch(e => { console.error('❌ Failed to start:', e); process.exit(1); });
