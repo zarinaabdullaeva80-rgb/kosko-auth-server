@@ -56,17 +56,37 @@ app.get('/api/debug/admin-html', (req, res) => {
     const filePath = path.join(__dirname, 'public', 'admin.html');
     try {
         const content = fs.readFileSync(filePath, 'utf-8');
+        const lines = content.split('\n');
+        // Find where key sections are
+        const tbodyLine = lines.findIndex(l => l.includes('loyalty-cards-tbody'));
+        const csvLine = lines.findIndex(l => l.includes('csv-loyalty-file'));
+        const addBtnLine = lines.findIndex(l => l.includes('addLoyaltyCard'));
+        const secLoyaltyLine = lines.findIndex(l => l.includes('sec-loyalty'));
+        // Count div/section tags in loyalty section
+        const loyaltyStart = secLoyaltyLine;
+        let loyaltyEnd = -1;
+        for (let i = loyaltyStart + 1; i < lines.length; i++) {
+            if (lines[i].includes('<section') && lines[i].includes('id="sec-')) { loyaltyEnd = i; break; }
+        }
+        const loyaltyHTML = lines.slice(loyaltyStart, loyaltyEnd >= 0 ? loyaltyEnd : loyaltyStart + 200).join('\n');
+        const openDivs = (loyaltyHTML.match(/<div/g) || []).length;
+        const closeDivs = (loyaltyHTML.match(/<\/div>/g) || []).length;
+        
         res.json({
             fileSize: content.length,
-            lines: content.split('\n').length,
-            has_loyalty_cards_tbody: content.includes('loyalty-cards-tbody'),
-            has_csv_loyalty_file: content.includes('csv-loyalty-file'),
-            has_addLoyaltyCard: content.includes('addLoyaltyCard'),
-            has_loadLoyaltyCards: content.includes('loadLoyaltyCards'),
-            has_importLoyaltyCSV: content.includes('importLoyaltyCSV'),
-            has_build_marker: content.includes('build:20260318'),
+            lines: lines.length,
+            secLoyaltyLine: secLoyaltyLine + 1,
+            tbodyLine: tbodyLine + 1,
+            csvLine: csvLine + 1,
+            addBtnLine: addBtnLine + 1,
+            loyaltyEndLine: loyaltyEnd + 1,
+            loyaltySectionLength: loyaltyEnd >= 0 ? loyaltyEnd - loyaltyStart : 'unknown',
+            openDivs, closeDivs, divBalance: openDivs - closeDivs,
+            has_loyalty_cards_tbody: tbodyLine >= 0,
+            has_csv_loyalty_file: csvLine >= 0,
             has_showToast: content.includes('showToast'),
-            last100chars: content.slice(-100),
+            // Show the HTML around where content stops rendering
+            htmlAroundAddBtn: lines.slice(Math.max(0, addBtnLine - 2), addBtnLine + 15).join('\n'),
         });
     } catch(e) { res.json({ error: e.message }); }
 });
