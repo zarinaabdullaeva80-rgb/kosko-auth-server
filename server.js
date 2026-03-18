@@ -929,6 +929,11 @@ app.get('/api/registry/approved', (req, res) => {
 // Cards stored on cloud, synced with store servers
 // loyaltyCards Map is declared above (line ~296)
 
+// List all cards (admin) — MUST be before /:phone route
+app.get('/api/loyalty', (req, res) => {
+    res.json({ cards: Array.from(loyaltyCards.values()), total: loyaltyCards.size });
+});
+
 // Get card by phone
 app.get('/api/loyalty/:phone', (req, res) => {
     const phone = req.params.phone.replace(/\D/g, '');
@@ -995,10 +1000,6 @@ app.post('/api/loyalty/:phone/spend', (req, res) => {
     res.json({ ok: true, card });
 });
 
-// List all cards (admin)
-app.get('/api/loyalty', (req, res) => {
-    res.json({ cards: Array.from(loyaltyCards.values()), total: loyaltyCards.size });
-});
 
 // ─── STORE SERVER BRIDGE ─────────────────────────────
 // Fetches data from approved store servers (1C/Frontol)
