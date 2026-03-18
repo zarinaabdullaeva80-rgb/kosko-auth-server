@@ -1,39 +1,49 @@
 @echo off
 chcp 65001 >nul
 REM ============================================
-REM  KOSKO Auto-Import: Loyalty Cards from CSV
-REM  Put this .bat on the 1C computer
-REM  Schedule with Windows Task Scheduler (every hour)
+REM  KOSKO Auto-Import: Discount Cards (IgotoShop 11.3)
+REM  Format: Tab-separated (Код  Наименование  Код карты  Владелец)
+REM  Schedule with Windows Task Scheduler
 REM ============================================
 
 SET KOSKO_SERVER=https://kosko-auth-server.onrender.com
-SET CSV_FOLDER=C:\1C_Export
-SET CSV_FILE=%CSV_FOLDER%\loyalty_cards.csv
+SET CSV_FILE=%~dp0loyalty_cards.csv
 
-REM Check if CSV file exists
+REM Also check Desktop
+IF NOT EXIST "%CSV_FILE%" SET CSV_FILE=%USERPROFILE%\Desktop\Список.csv
+
+REM Check if file exists
 IF NOT EXIST "%CSV_FILE%" (
-    echo [%date% %time%] CSV file not found: %CSV_FILE%
-    echo Make sure 1C exports to: %CSV_FILE%
-    echo Format: phone;name;balance (semicolon separated)
+    echo [%date% %time%] CSV file not found
+    echo Put the file next to this .bat or export from IgotoShop to Desktop
+    pause
     exit /b 1
 )
 
-echo [%date% %time%] Starting KOSKO loyalty import from %CSV_FILE%
+echo [%date% %time%] Starting KOSKO import from: %CSV_FILE%
+echo.
 
-REM Read CSV and send each line to KOSKO API
-SET /A imported=0
-SET /A errors=0
+powershell -ExecutionPolicy Bypass -Command ^
+    "$lines = Get-Content '%CSV_FILE%' -Encoding UTF8; " ^
+    "$total = $lines.Count - 1; $ok = 0; $err = 0; " ^
+    "Write-Host ('Total cards: ' + $total); " ^
+    "for ($i = 1; $i -lt $lines.Count; $i++) { " ^
+    "    $parts = $lines[$i] -split \"`t\"; " ^
+    "    $code = $parts[0].Trim(); " ^
+    "    $name = $parts[1].Trim(); " ^
+    "    if (-not $code -and -not $name) { continue }; " ^
+    "    $isBarcode = $name -match '^\d{10,}$'; " ^
+    "    $cardName = if ($isBarcode) { 'Card ' + $name } else { $name }; " ^
+    "    $body = @{ phone = $code; name = $cardName; balance = 0; level = 'Стандарт'; source = 'IgotoShop' } | ConvertTo-Json -Compress; " ^
+    "    try { " ^
+    "        $r = Invoke-RestMethod -Uri '%KOSKO_SERVER%/api/loyalty' -Method POST -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes($body)); " ^
+    "        if ($r.ok) { $ok++ } else { $err++ }; " ^
+    "    } catch { $err++ }; " ^
+    "    if ($i %% 20 -eq 0) { Write-Host ('  Imported ' + $ok + '/' + $total + '...') }; " ^
+    "}; " ^
+    "Write-Host ''; " ^
+    "Write-Host ('Done! Imported: ' + $ok + ', Errors: ' + $err);"
 
-FOR /F "usebackq skip=1 tokens=1-3 delims=;" %%A IN ("%CSV_FILE%") DO (
-    powershell -Command "try { $r = Invoke-RestMethod -Uri '%KOSKO_SERVER%/api/loyalty' -Method POST -ContentType 'application/json' -Body ('{\"phone\":\"%%A\",\"name\":\"%%B\",\"balance\":%%C}'); if($r.ok) { Write-Host 'OK: %%A' } else { Write-Host 'ERR: %%A' } } catch { Write-Host 'FAIL: %%A - ' + $_.Exception.Message }"
-    SET /A imported+=1
-)
-
-echo [%date% %time%] Import complete. Processed: %imported% cards
-
-REM Rename file to avoid re-import
-SET BACKUP=%CSV_FOLDER%\loyalty_imported_%date:~-4%%date:~3,2%%date:~0,2%.csv
-move "%CSV_FILE%" "%BACKUP%" >nul 2>&1
-echo [%date% %time%] CSV moved to: %BACKUP%
-
+echo.
+echo [%date% %time%] Import complete
 pause
