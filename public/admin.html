@@ -2243,6 +2243,7 @@
 
         // ─── TOAST ────────────────────────────────────────
         function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
+        const showToast = toast; // backward-compatible alias
 
         // ─── SYNC ─────────────────────────────────────────
         function syncToApp() {
