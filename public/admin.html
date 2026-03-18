@@ -3040,15 +3040,22 @@
         }
 
         // ─── NETWORK SCANNER ─────────────────────────────
-        const SCAN_PORTS = [8080, 80, 3030, 8081, 5000, 443];
-        const SCAN_SUBNETS = ['192.168.0', '192.168.1', '192.168.100', '10.0.0', '10.0.1'];
+        const SCAN_PORTS = [8080, 80, 3030, 8081, 5000, 443, 1540, 1541, 1560, 1561];
+        const SCAN_SUBNETS = [
+            '192.168.200', // KOSKO store network
+            '192.168.0', '192.168.1', '192.168.2',
+            '192.168.10', '192.168.50', '192.168.100',
+            '192.168.88', '192.168.168',
+            '10.0.0', '10.0.1', '10.1.0', '10.1.1',
+            '172.16.0', '172.16.1',
+        ];
         let scanRunning = false;
 
         async function probeHost(ip, port) {
             const url = `http://${ip}:${port}`;
             try {
                 const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 1500);
+                const timeout = setTimeout(() => controller.abort(), 2000);
                 const res = await fetch(url, { mode: 'no-cors', signal: controller.signal });
                 clearTimeout(timeout);
                 return { ip, port, url, reachable: true };
@@ -3071,16 +3078,28 @@
             progress.style.display = 'block';
             results.innerHTML = '';
 
+            // Auto-detect subnet from manual IP field
+            const manualIP = document.getElementById('manual-ip')?.value || '';
+            const subnets = [...SCAN_SUBNETS];
+            const match = manualIP.match(/(\d+\.\d+\.\d+)\.\d+/);
+            if (match && !subnets.includes(match[1])) {
+                subnets.unshift(match[1]); // Add user's subnet to top priority
+                results.innerHTML += `<div style="color:var(--violet);margin-top:4px">📡 Добавлена подсеть ${match[1]}.* из ручного ввода</div>`;
+            }
+
             const found = [];
-            const totalIPs = SCAN_SUBNETS.length * 254;
-            let checked = 0;
+            let totalChecked = 0;
+            const totalSubnets = subnets.length;
 
             // Scan each subnet
-            for (const subnet of SCAN_SUBNETS) {
-                // Batch of 20 simultaneous probes for speed
-                for (let start = 1; start <= 254; start += 20) {
+            for (let si = 0; si < totalSubnets; si++) {
+                const subnet = subnets[si];
+                status.textContent = `Сканируется ${subnet}.* (подсеть ${si + 1}/${totalSubnets})...`;
+
+                // Batch of 30 simultaneous probes for speed
+                for (let start = 1; start <= 254; start += 30) {
                     const batch = [];
-                    for (let i = start; i < Math.min(start + 20, 255); i++) {
+                    for (let i = start; i < Math.min(start + 30, 255); i++) {
                         const ip = `${subnet}.${i}`;
                         for (const port of SCAN_PORTS) {
                             batch.push(probeHost(ip, port));
@@ -3088,17 +3107,20 @@
                     }
                     const results_batch = await Promise.all(batch);
                     results_batch.filter(r => r).forEach(r => {
-                        found.push(r);
-                        results.innerHTML += `<div style="color:var(--green);margin-top:4px">✅ Найден: ${r.url}</div>`;
+                        // Avoid duplicates
+                        if (!found.some(f => f.url === r.url)) {
+                            found.push(r);
+                            results.innerHTML += `<div style="color:var(--green);margin-top:4px">✅ Найден: ${r.url}</div>`;
+                        }
                     });
-                    checked += 20;
-                    bar.style.width = Math.min(100, Math.round(checked / 254 * 100 / SCAN_SUBNETS.length * (SCAN_SUBNETS.indexOf(subnet) + 1))) + '%';
-                    status.textContent = `Сканируется ${subnet}.* (${checked}/${254})...`;
+                    totalChecked += 30;
+                    bar.style.width = Math.min(100, Math.round(((si * 254 + Math.min(totalChecked, 254)) / (totalSubnets * 254)) * 100)) + '%';
                 }
+                totalChecked = 0;
             }
 
             bar.style.width = '100%';
-            status.textContent = `Готово! Найдено ${found.length} серверов.`;
+            status.textContent = `Готово! Найдено ${found.length} серверов. Просканировано ${totalSubnets} подсетей.`;
 
             // Report found servers to registry
             for (const srv of found) {
@@ -3110,7 +3132,7 @@
                             baseUrl: srv.url,
                             name: `Server ${srv.ip}:${srv.port}`,
                             networkType: 'WiFi (admin scan)',
-                            type: srv.port === 8080 ? '1C/HTTP' : srv.port === 3030 ? 'Frontol' : 'Unknown',
+                            type: srv.port === 8080 ? '1C/HTTP' : srv.port === 3030 ? 'Frontol' : srv.port === 1540 ? '1C/Ragent' : srv.port === 1541 ? '1C/RAS' : 'Unknown',
                         })
                     });
                 } catch {}
@@ -3120,7 +3142,7 @@
                 showToast(`📡 Найдено ${found.length} серверов! Обновляю список...`);
                 loadServers();
             } else {
-                results.innerHTML = '<div style="color:var(--muted);margin-top:4px">Серверы не найдены в локальной сети. Попробуйте ввести IP вручную.</div>';
+                results.innerHTML += '<div style="color:var(--muted);margin-top:8px">Серверы не найдены. Убедитесь что:<br>• Вы подключены к WiFi магазина<br>• Сервер 1С включён<br>• Попробуйте ввести IP вручную (например 192.168.200.100:8080)</div>';
             }
 
             btn.disabled = false;
