@@ -58,7 +58,7 @@ function persistData() {
         dbSet('loyaltyConfig', loyaltyConfig),
         dbSet('promotions', promotions),
         dbSet('promoIdCounter', promoIdCounter),
-        dbSet('integration1cConfig', integration1cConfig),
+        dbSet('integration1cStores', integration1cStores),
     ]).then(() => console.log('💾 Data persisted to PostgreSQL'))
       .catch(e => console.error('❌ Persist error:', e.message));
 }
@@ -68,7 +68,7 @@ async function loadPersistedData() {
     try {
         const keys = ['storeSettings','products','productIdCounter','banners','bannerIdCounter',
                        'promocodes','orders','orderIdCounter','serverRegistry',
-                       'loyaltyCards','loyaltyConfig','promotions','promoIdCounter','integration1cConfig'];
+                       'loyaltyCards','loyaltyConfig','promotions','promoIdCounter','integration1cStores'];
         const result = {};
         for (const key of keys) {
             result[key] = await dbGet(key);
@@ -677,154 +677,124 @@ app.post('/api/settings/delivery/toggle', (req, res) => {
     persistData();
     res.json({ ok: true, deliveryEnabled: storeSettings.deliveryEnabled });
 });
+// ─── 1C INTEGRATION (MULTI-STORE) ────────────────────
+let integration1cStores = [
+    { id: 'kosko-3-2', name: 'КОСКО 3/2', server: 'KServer', port: 1541, baseName: 'KOSKO', login: '', password: '', syncInterval: 5, cloudApiKey: crypto.randomUUID(), enabled: false, lastSync: null, lastError: null, syncStatus: 'idle', syncAdded: 0, syncUpdated: 0 },
+    { id: 'kosko-koltso', name: 'КОСКО Кольцо', server: '', port: 1541, baseName: '', login: '', password: '', syncInterval: 5, cloudApiKey: crypto.randomUUID(), enabled: false, lastSync: null, lastError: null, syncStatus: 'idle', syncAdded: 0, syncUpdated: 0 },
+    { id: 'koltso-trassa', name: 'Кольцо Трасса', server: '', port: 1541, baseName: '', login: '', password: '', syncInterval: 5, cloudApiKey: crypto.randomUUID(), enabled: false, lastSync: null, lastError: null, syncStatus: 'idle', syncAdded: 0, syncUpdated: 0 },
+];
 
-// ─── 1C INTEGRATION ──────────────────────────────────
-let integration1cConfig = {
-    server: 'KServer',
-    port: 1541,
-    baseName: 'KOSKO',
-    login: '',
-    password: '',
-    syncInterval: 5,           // minutes
-    cloudApiKey: crypto.randomUUID(), // for agent authentication
-    enabled: false,
-};
-
-let sync1cStatus = {
-    lastSync: null,
-    lastError: null,
-    productsCount: 0,
-    status: 'idle', // idle, syncing, success, error
-};
-
-// Get 1C config (no password in response)
-app.get('/api/1c/config', (req, res) => {
-    const { password, ...safe } = integration1cConfig;
-    res.json({ ...safe, hasPassword: !!password });
+// Get all stores config (no passwords)
+app.get('/api/1c/stores', (req, res) => {
+    res.json(integration1cStores.map(s => {
+        const { password, ...safe } = s;
+        return { ...safe, hasPassword: !!password };
+    }));
 });
 
-// Save 1C config
-app.post('/api/1c/config', (req, res) => {
+// Save store config by ID
+app.post('/api/1c/stores/:storeId/config', (req, res) => {
+    const store = integration1cStores.find(s => s.id === req.params.storeId);
+    if (!store) return res.status(404).json({ error: 'Store not found' });
     const { server, port, baseName, login, password, syncInterval, enabled } = req.body;
-    if (server !== undefined) integration1cConfig.server = server;
-    if (port !== undefined) integration1cConfig.port = Number(port);
-    if (baseName !== undefined) integration1cConfig.baseName = baseName;
-    if (login !== undefined) integration1cConfig.login = login;
-    if (password !== undefined && password !== '') integration1cConfig.password = password;
-    if (syncInterval !== undefined) integration1cConfig.syncInterval = Number(syncInterval);
-    if (enabled !== undefined) integration1cConfig.enabled = enabled;
-    console.log(`🔗 1C config updated: ${integration1cConfig.server}:${integration1cConfig.port}/${integration1cConfig.baseName}`);
+    if (server !== undefined) store.server = server;
+    if (port !== undefined) store.port = Number(port);
+    if (baseName !== undefined) store.baseName = baseName;
+    if (login !== undefined) store.login = login;
+    if (password !== undefined && password !== '') store.password = password;
+    if (syncInterval !== undefined) store.syncInterval = Number(syncInterval);
+    if (enabled !== undefined) store.enabled = enabled;
+    console.log(`🔗 1C [${store.name}] config: ${store.server}:${store.port}/${store.baseName}`);
     persistData();
-    const { password: pw, ...safe } = integration1cConfig;
-    res.json({ ok: true, config: { ...safe, hasPassword: !!pw } });
+    const { password: pw, ...safe } = store;
+    res.json({ ok: true, store: { ...safe, hasPassword: !!pw } });
 });
 
-// Receive products from agent
+// Receive products from store agent
 app.post('/api/1c/sync/products', (req, res) => {
-    const { apiKey, items } = req.body;
-    if (apiKey !== integration1cConfig.cloudApiKey) {
-        return res.status(403).json({ error: 'Invalid API key' });
-    }
-    if (!Array.isArray(items)) {
-        return res.status(400).json({ error: 'items must be array' });
-    }
-    sync1cStatus.status = 'syncing';
+    const { apiKey, items, storeId } = req.body;
+    const store = integration1cStores.find(s => s.cloudApiKey === apiKey);
+    if (!store) return res.status(403).json({ error: 'Invalid API key' });
+    if (!Array.isArray(items)) return res.status(400).json({ error: 'items must be array' });
+    const sid = store.id;
+    store.syncStatus = 'syncing';
     let added = 0, updated = 0;
     for (const item of items) {
-        const existing = Array.from(products.values()).find(p => p.barcode === item.barcode);
+        const existing = Array.from(products.values()).find(p => p.barcode === item.barcode && p.storeId === sid);
         if (existing) {
-            Object.assign(existing, {
-                name: item.name || existing.name,
-                price: item.price ?? existing.price,
-                category: item.category || existing.category,
-                unit: item.unit || existing.unit,
-                description: item.description || existing.description,
-                updatedAt: Date.now(),
-            });
+            Object.assign(existing, { name: item.name || existing.name, price: item.price ?? existing.price, category: item.category || existing.category, unit: item.unit || existing.unit, updatedAt: Date.now() });
             updated++;
         } else {
             const id = String(productIdCounter++);
-            products.set(id, {
-                id,
-                name: item.name || 'Без названия',
-                price: item.price || 0,
-                barcode: item.barcode || '',
-                category: item.category || 'Товары',
-                unit: item.unit || 'шт',
-                imageUrl: item.imageUrl || '',
-                description: item.description || '',
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-                source: '1c',
-            });
+            products.set(id, { id, name: item.name || 'Без названия', price: item.price || 0, barcode: item.barcode || '', category: item.category || 'Товары', unit: item.unit || 'шт', imageUrl: '', description: '', createdAt: Date.now(), updatedAt: Date.now(), source: '1c', storeId: sid });
             added++;
         }
     }
-    sync1cStatus = {
-        lastSync: Date.now(),
-        lastError: null,
-        productsCount: products.size,
-        status: 'success',
-        added,
-        updated,
-        total: items.length,
-    };
+    Object.assign(store, { lastSync: Date.now(), lastError: null, syncStatus: 'success', syncAdded: added, syncUpdated: updated });
     persistData();
-    console.log(`📦 1C sync: +${added} new, ${updated} updated, total ${products.size} products`);
-    res.json({ ok: true, ...sync1cStatus });
+    console.log(`📦 1C [${store.name}]: +${added} new, ${updated} updated`);
+    res.json({ ok: true, store: store.name, added, updated, total: items.length });
 });
 
-// Sync status
-app.get('/api/1c/status', (req, res) => {
-    res.json(sync1cStatus);
+// Status per store
+app.get('/api/1c/stores/:storeId/status', (req, res) => {
+    const store = integration1cStores.find(s => s.id === req.params.storeId);
+    if (!store) return res.status(404).json({ error: 'Store not found' });
+    res.json({ id: store.id, name: store.name, syncStatus: store.syncStatus, lastSync: store.lastSync, lastError: store.lastError, syncAdded: store.syncAdded, syncUpdated: store.syncUpdated, productsCount: Array.from(products.values()).filter(p => p.storeId === store.id).length });
 });
 
-// List products imported from 1C
-app.get('/api/1c/products', (req, res) => {
-    const all = Array.from(products.values());
-    const from1c = all.filter(p => p.source === '1c');
+// Products by store
+app.get('/api/1c/stores/:storeId/products', (req, res) => {
+    const sid = req.params.storeId;
+    const from1c = Array.from(products.values()).filter(p => p.source === '1c' && (!sid || sid === 'all' || p.storeId === sid));
     res.json({ total: from1c.length, products: from1c.slice(0, 100) });
 });
 
-// Manual test sync (for testing without agent)
-app.post('/api/1c/test-sync', (req, res) => {
-    const testItems = [
-        { barcode: 'TEST-001', name: 'Тестовый товар 1', price: 15000, unit: 'шт', category: 'Тест' },
-        { barcode: 'TEST-002', name: 'Тестовый товар 2', price: 25000, unit: 'шт', category: 'Тест' },
-    ];
-    // Reuse sync logic - bypass API key for admin test
-    let added = 0, updated = 0;
-    for (const item of testItems) {
-        const existing = Array.from(products.values()).find(p => p.barcode === item.barcode);
-        if (existing) {
-            Object.assign(existing, { name: item.name, price: item.price, unit: item.unit, category: item.category, updatedAt: Date.now() });
-            updated++;
-        } else {
-            const id = String(productIdCounter++);
-            products.set(id, { id, ...item, imageUrl: '', description: '', createdAt: Date.now(), updatedAt: Date.now(), source: '1c' });
-            added++;
-        }
-    }
-    sync1cStatus = { lastSync: Date.now(), lastError: null, productsCount: products.size, status: 'success', added, updated, total: testItems.length };
-    persistData();
-    res.json({ ok: true, message: `Тест: +${added} новых, ${updated} обновлённых`, ...sync1cStatus });
+// All 1C products
+app.get('/api/1c/products', (req, res) => {
+    const from1c = Array.from(products.values()).filter(p => p.source === '1c');
+    res.json({ total: from1c.length, products: from1c.slice(0, 100) });
 });
 
-// Download agent script
-app.get('/api/1c/agent', (req, res) => {
-    const script = generate1CAgentScript();
+// Test sync for a store
+app.post('/api/1c/stores/:storeId/test-sync', (req, res) => {
+    const store = integration1cStores.find(s => s.id === req.params.storeId);
+    if (!store) return res.status(404).json({ error: 'Store not found' });
+    const testItems = [
+        { barcode: 'TEST-' + store.id + '-001', name: 'Тест ' + store.name + ' #1', price: 15000, unit: 'шт', category: 'Тест' },
+        { barcode: 'TEST-' + store.id + '-002', name: 'Тест ' + store.name + ' #2', price: 25000, unit: 'шт', category: 'Тест' },
+    ];
+    let added = 0, updated = 0;
+    for (const item of testItems) {
+        const existing = Array.from(products.values()).find(p => p.barcode === item.barcode && p.storeId === store.id);
+        if (existing) { Object.assign(existing, { ...item, updatedAt: Date.now() }); updated++; }
+        else { const id = String(productIdCounter++); products.set(id, { id, ...item, imageUrl: '', description: '', createdAt: Date.now(), updatedAt: Date.now(), source: '1c', storeId: store.id }); added++; }
+    }
+    Object.assign(store, { lastSync: Date.now(), lastError: null, syncStatus: 'success', syncAdded: added, syncUpdated: updated });
+    persistData();
+    res.json({ ok: true, message: `Тест [${store.name}]: +${added} новых, ${updated} обновлённых` });
+});
+
+// Backward compat
+app.get('/api/1c/config', (req, res) => { res.redirect('/api/1c/stores'); });
+app.get('/api/1c/status', (req, res) => { res.json(integration1cStores.map(s => ({ id: s.id, name: s.name, syncStatus: s.syncStatus, lastSync: s.lastSync }))); });
+
+// Download agent for specific store
+app.get('/api/1c/stores/:storeId/agent', (req, res) => {
+    const store = integration1cStores.find(s => s.id === req.params.storeId);
+    if (!store) return res.status(404).json({ error: 'Store not found' });
+    const script = generate1CAgentScript(store);
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'attachment; filename="kosko-agent.bat"');
+    res.setHeader('Content-Disposition', 'attachment; filename="kosko-agent-' + store.id + '.bat"');
     res.send(script);
 });
 
-function generate1CAgentScript() {
-    const cfg = integration1cConfig;
+function generate1CAgentScript(cfg) {
     const lines = [
         '@echo off',
         'chcp 65001 >nul',
         'echo ======================================',
-        'echo   KOSKO Agent - IgotoShop Sync',
+        'echo   KOSKO Agent - ' + cfg.name,
         'echo ======================================',
         '',
         'powershell -ExecutionPolicy Bypass -Command "',
@@ -836,8 +806,9 @@ function generate1CAgentScript() {
         "$password = '" + cfg.password + "'",
         "$cloudUrl = 'https://kosko-auth-server.onrender.com/api/1c/sync/products'",
         "$apiKey = '" + cfg.cloudApiKey + "'",
+        "$storeId = '" + cfg.id + "'",
         '',
-        "Write-Host 'Connecting to 1C...' -ForegroundColor Cyan",
+        "Write-Host 'Connecting to 1C [" + cfg.name + "]...' -ForegroundColor Cyan",
         'try {',
         "    $connector = New-Object -ComObject V83.COMConnector",
         "    $connStr = 'Srvr=' + $server + ';Ref=' + $base + ';Usr=' + $login + ';Pwd=' + $password",
@@ -850,7 +821,7 @@ function generate1CAgentScript() {
         '    try {',
         '        $result = $query.Execute().Unload()',
         '    } catch {',
-        "        Write-Host 'Trying alt query...' -ForegroundColor Yellow",
+        "        Write-Host 'Trying Russian query...' -ForegroundColor Yellow",
         "        $query.Text = 'ВЫБРАТЬ Код, Наименование КАК Name ИЗ Справочник.Номенклатура ГДЕ ПометкаУдаления = ЛОЖЬ И ЭтоГруппа = ЛОЖЬ'",
         '        $result = $query.Execute().Unload()',
         '    }',
@@ -858,12 +829,12 @@ function generate1CAgentScript() {
         '    $items = @()',
         '    for ($i = 0; $i -lt $result.Count(); $i++) {',
         '        $row = $result.Get($i)',
-        '        $items += @{ barcode = $row.Code; name = $row.Name; price = 0; unit = \"sht\"; category = \"Products\" }',
+        '        $items += @{ barcode = $row.Code; name = $row.Name; price = 0; unit = "sht"; category = "Products" }',
         '    }',
         "    Write-Host ('Found ' + $items.Count + ' products') -ForegroundColor Green",
         '    $conn = $null',
         '',
-        '    $body = @{ apiKey = $apiKey; items = $items } | ConvertTo-Json -Depth 5 -Compress',
+        '    $body = @{ apiKey = $apiKey; storeId = $storeId; items = $items } | ConvertTo-Json -Depth 5 -Compress',
         "    $resp = Invoke-RestMethod -Uri $cloudUrl -Method POST -Body $body -ContentType 'application/json; charset=utf-8'",
         "    Write-Host ('Synced! Added: ' + $resp.added + ', Updated: ' + $resp.updated) -ForegroundColor Green",
         '} catch {',
@@ -1397,7 +1368,7 @@ async function startServer() {
         if (saved.loyaltyConfig) Object.assign(loyaltyConfig, saved.loyaltyConfig);
         if (saved.promotions) { promotions.length = 0; promotions.push(...saved.promotions); }
         if (saved.promoIdCounter) promoIdCounter = saved.promoIdCounter;
-        if (saved.integration1cConfig) Object.assign(integration1cConfig, saved.integration1cConfig);
+        if (saved.integration1cStores) { saved.integration1cStores.forEach(ss => { const st = integration1cStores.find(s => s.id === ss.id); if (st) Object.assign(st, ss); else integration1cStores.push(ss); }); }
         console.log(`✅ Restored: ${products.size} products, ${orders.size} orders, ${serverRegistry.size} servers, ${loyaltyCards.size} loyalty cards`);
     }
 
