@@ -1343,6 +1343,7 @@
             <div class="nav-item" onclick="goTo('chat',this)"><span class="ni">💬</span> Чат</div>
             <div class="nav-item" onclick="goTo('servers',this)"><span class="ni">🖥️</span> Серверы</div>
             <div class="nav-item" onclick="goTo('catalog',this)"><span class="ni">📦</span> Каталог</div>
+            <div class="nav-item" onclick="goTo('integration1c',this)"><span class="ni">🔗</span> 1С Интеграция</div>
             <div class="nav-item" onclick="goTo('settings',this)"><span class="ni">⚙️</span> Настройки</div>
         </nav>
         <div class="sidebar-bottom">
@@ -1954,6 +1955,76 @@
                 </div>
             </section>
 
+            <!-- ═══ 1C INTEGRATION ═══ -->
+            <section class="section" id="sec-integration1c">
+                <div class="section-heading">🔗 Интеграция с 1С (IgotoShop)</div>
+                <div class="section-desc">Подключение к 1С:Предприятие 8.3 для автоматической синхронизации товаров.</div>
+
+                <div class="card-box" style="margin-bottom:16px">
+                    <div class="card-box-header"><span class="card-box-title">⚙️ Настройки подключения</span></div>
+                    <div style="padding:20px">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                            <div>
+                                <label style="font-size:13px;color:#aaa">Сервер 1С</label>
+                                <input id="i1c-server" class="inp" placeholder="KServer" style="width:100%">
+                            </div>
+                            <div>
+                                <label style="font-size:13px;color:#aaa">Порт</label>
+                                <input id="i1c-port" class="inp" type="number" placeholder="1541" style="width:100%">
+                            </div>
+                            <div>
+                                <label style="font-size:13px;color:#aaa">Имя базы</label>
+                                <input id="i1c-base" class="inp" placeholder="KOSKO" style="width:100%">
+                            </div>
+                            <div>
+                                <label style="font-size:13px;color:#aaa">Интервал синхронизации (мин)</label>
+                                <input id="i1c-interval" class="inp" type="number" placeholder="5" style="width:100%">
+                            </div>
+                            <div>
+                                <label style="font-size:13px;color:#aaa">Логин 1С</label>
+                                <input id="i1c-login" class="inp" placeholder="итого" style="width:100%">
+                            </div>
+                            <div>
+                                <label style="font-size:13px;color:#aaa">Пароль 1С</label>
+                                <input id="i1c-password" class="inp" type="password" placeholder="Пароль" style="width:100%">
+                            </div>
+                        </div>
+                        <div style="margin-top:16px;display:flex;gap:12px;align-items:center">
+                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                                <input id="i1c-enabled" type="checkbox">
+                                <span style="color:#aaa;font-size:14px">Включить синхронизацию</span>
+                            </label>
+                        </div>
+                        <div style="margin-top:16px;display:flex;gap:12px">
+                            <button class="btn" onclick="save1cConfig()">💾 Сохранить настройки</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-box" style="margin-bottom:16px">
+                    <div class="card-box-header"><span class="card-box-title">📦 Статус синхронизации</span></div>
+                    <div style="padding:20px">
+                        <div id="i1c-status" style="color:#aaa;font-size:14px">Загрузка...</div>
+                    </div>
+                </div>
+
+                <div class="card-box" style="margin-bottom:16px">
+                    <div class="card-box-header"><span class="card-box-title">📥 Агент для ПК магазина</span></div>
+                    <div style="padding:20px">
+                        <p style="color:#aaa;font-size:14px;margin-bottom:12px">
+                            Скачайте и запустите агент на ПК с 1С:Предприятие. Скрипт подключится к базе 1С, прочитает товары и отправит на облачный сервер KOSKO.
+                        </p>
+                        <div style="display:flex;gap:12px">
+                            <button class="btn" onclick="download1cAgent()">📥 Скачать kosko-agent.bat</button>
+                            <button class="btn btn-outline" onclick="load1cStatus()">🔄 Обновить статус</button>
+                        </div>
+                        <div style="margin-top:12px;background:rgba(0,0,0,.3);border-radius:8px;padding:12px;font-size:12px;color:#888">
+                            <div><b>API ключ:</b> <span id="i1c-apikey" style="color:#4ecdc4;user-select:all">—</span></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- ═══ SETTINGS ═══ -->
             <section class="section" id="sec-settings">
                 <div class="section-heading">⚙️ Настройки магазина</div>
@@ -2221,7 +2292,7 @@
         function now() { return new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
 
         // ─── NAVIGATION ───────────────────────────────────
-        const titles = { dashboard: 'Dashboard', promotions: 'Управление акциями', push: 'Push-уведомления', loyalty: 'Бонусная программа', users: 'Пользователи', export: 'Экспорт данных', analytics: 'Аналитика', schedule: 'Расписание магазинов', products: 'Товары и цены', orders: 'Заказы и доставка', referrals: 'Реферальная программа', codes: 'Промокоды', chat: 'Чат поддержки', servers: 'Реестр серверов', catalog: 'Каталог товаров', settings: 'Настройки магазина' };
+        const titles = { dashboard: 'Dashboard', promotions: 'Управление акциями', push: 'Push-уведомления', loyalty: 'Бонусная программа', users: 'Пользователи', export: 'Экспорт данных', analytics: 'Аналитика', schedule: 'Расписание магазинов', products: 'Товары и цены', orders: 'Заказы и доставка', referrals: 'Реферальная программа', codes: 'Промокоды', chat: 'Чат поддержки', servers: 'Реестр серверов', catalog: 'Каталог товаров', integration1c: '1С Интеграция (IgotoShop)', settings: 'Настройки магазина' };
         function goTo(id, el) {
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -3422,6 +3493,70 @@
             loadProducts();
             event.target.value = '';
         }
+
+        // ─── 1C INTEGRATION ───────────────────────────────
+        async function load1cConfig() {
+            try {
+                const res = await fetch(API + '/api/1c/config');
+                const cfg = await res.json();
+                document.getElementById('i1c-server').value = cfg.server || '';
+                document.getElementById('i1c-port').value = cfg.port || 1541;
+                document.getElementById('i1c-base').value = cfg.baseName || '';
+                document.getElementById('i1c-login').value = cfg.login || '';
+                document.getElementById('i1c-interval').value = cfg.syncInterval || 5;
+                document.getElementById('i1c-enabled').checked = cfg.enabled || false;
+                document.getElementById('i1c-apikey').textContent = cfg.cloudApiKey || '—';
+                if (cfg.hasPassword) document.getElementById('i1c-password').placeholder = '••••••••';
+            } catch (e) { console.error('1C config load error:', e); }
+            load1cStatus();
+        }
+
+        async function save1cConfig() {
+            const body = {
+                server: document.getElementById('i1c-server').value,
+                port: document.getElementById('i1c-port').value,
+                baseName: document.getElementById('i1c-base').value,
+                login: document.getElementById('i1c-login').value,
+                password: document.getElementById('i1c-password').value,
+                syncInterval: document.getElementById('i1c-interval').value,
+                enabled: document.getElementById('i1c-enabled').checked,
+            };
+            try {
+                const res = await fetch(API + '/api/1c/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+                const data = await res.json();
+                if (data.ok) { showToast('✅ Настройки 1С сохранены'); load1cConfig(); }
+            } catch (e) { showToast('❌ Ошибка: ' + e.message); }
+        }
+
+        async function load1cStatus() {
+            try {
+                const res = await fetch(API + '/api/1c/status');
+                const s = await res.json();
+                const el = document.getElementById('i1c-status');
+                if (s.status === 'idle') {
+                    el.innerHTML = '⏸️ Синхронизация ещё не запускалась';
+                } else if (s.status === 'success') {
+                    const dt = new Date(s.lastSync).toLocaleString('ru-RU');
+                    el.innerHTML = `✅ Последняя: <b>${dt}</b><br>📦 Товаров: <b>${s.productsCount}</b> (добавлено: ${s.added}, обновлено: ${s.updated})`;
+                } else if (s.status === 'error') {
+                    el.innerHTML = `❌ Ошибка: <b>${s.lastError}</b>`;
+                } else {
+                    el.innerHTML = '🔄 Идёт синхронизация...';
+                }
+            } catch (e) { document.getElementById('i1c-status').innerHTML = '❌ Не удалось загрузить статус'; }
+        }
+
+        function download1cAgent() {
+            window.open(API + '/api/1c/agent', '_blank');
+            showToast('📥 Скачивание агента...');
+        }
+
+        // Auto-load 1C config when section opens
+        const origGoTo = goTo;
+        goTo = function(id, el) {
+            origGoTo(id, el);
+            if (id === 'integration1c') load1cConfig();
+        };
 
         // ─── SETTINGS ─────────────────────────────────────
         async function loadSettings() {

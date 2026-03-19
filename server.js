@@ -58,6 +58,7 @@ function persistData() {
         dbSet('loyaltyConfig', loyaltyConfig),
         dbSet('promotions', promotions),
         dbSet('promoIdCounter', promoIdCounter),
+        dbSet('integration1cConfig', integration1cConfig),
     ]).then(() => console.log('💾 Data persisted to PostgreSQL'))
       .catch(e => console.error('❌ Persist error:', e.message));
 }
@@ -67,7 +68,7 @@ async function loadPersistedData() {
     try {
         const keys = ['storeSettings','products','productIdCounter','banners','bannerIdCounter',
                        'promocodes','orders','orderIdCounter','serverRegistry',
-                       'loyaltyCards','loyaltyConfig','promotions','promoIdCounter'];
+                       'loyaltyCards','loyaltyConfig','promotions','promoIdCounter','integration1cConfig'];
         const result = {};
         for (const key of keys) {
             result[key] = await dbGet(key);
@@ -677,6 +678,181 @@ app.post('/api/settings/delivery/toggle', (req, res) => {
     res.json({ ok: true, deliveryEnabled: storeSettings.deliveryEnabled });
 });
 
+// ─── 1C INTEGRATION ──────────────────────────────────
+let integration1cConfig = {
+    server: 'KServer',
+    port: 1541,
+    baseName: 'KOSKO',
+    login: '',
+    password: '',
+    syncInterval: 5,           // minutes
+    cloudApiKey: crypto.randomUUID(), // for agent authentication
+    enabled: false,
+};
+
+let sync1cStatus = {
+    lastSync: null,
+    lastError: null,
+    productsCount: 0,
+    status: 'idle', // idle, syncing, success, error
+};
+
+// Get 1C config (no password in response)
+app.get('/api/1c/config', (req, res) => {
+    const { password, ...safe } = integration1cConfig;
+    res.json({ ...safe, hasPassword: !!password });
+});
+
+// Save 1C config
+app.post('/api/1c/config', (req, res) => {
+    const { server, port, baseName, login, password, syncInterval, enabled } = req.body;
+    if (server !== undefined) integration1cConfig.server = server;
+    if (port !== undefined) integration1cConfig.port = Number(port);
+    if (baseName !== undefined) integration1cConfig.baseName = baseName;
+    if (login !== undefined) integration1cConfig.login = login;
+    if (password !== undefined && password !== '') integration1cConfig.password = password;
+    if (syncInterval !== undefined) integration1cConfig.syncInterval = Number(syncInterval);
+    if (enabled !== undefined) integration1cConfig.enabled = enabled;
+    console.log(`🔗 1C config updated: ${integration1cConfig.server}:${integration1cConfig.port}/${integration1cConfig.baseName}`);
+    persistData();
+    const { password: pw, ...safe } = integration1cConfig;
+    res.json({ ok: true, config: { ...safe, hasPassword: !!pw } });
+});
+
+// Receive products from agent
+app.post('/api/1c/sync/products', (req, res) => {
+    const { apiKey, items } = req.body;
+    if (apiKey !== integration1cConfig.cloudApiKey) {
+        return res.status(403).json({ error: 'Invalid API key' });
+    }
+    if (!Array.isArray(items)) {
+        return res.status(400).json({ error: 'items must be array' });
+    }
+    sync1cStatus.status = 'syncing';
+    let added = 0, updated = 0;
+    for (const item of items) {
+        const existing = Array.from(products.values()).find(p => p.barcode === item.barcode);
+        if (existing) {
+            Object.assign(existing, {
+                name: item.name || existing.name,
+                price: item.price ?? existing.price,
+                category: item.category || existing.category,
+                unit: item.unit || existing.unit,
+                description: item.description || existing.description,
+                updatedAt: Date.now(),
+            });
+            updated++;
+        } else {
+            const id = String(productIdCounter++);
+            products.set(id, {
+                id,
+                name: item.name || 'Без названия',
+                price: item.price || 0,
+                barcode: item.barcode || '',
+                category: item.category || 'Товары',
+                unit: item.unit || 'шт',
+                imageUrl: item.imageUrl || '',
+                description: item.description || '',
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                source: '1c',
+            });
+            added++;
+        }
+    }
+    sync1cStatus = {
+        lastSync: Date.now(),
+        lastError: null,
+        productsCount: products.size,
+        status: 'success',
+        added,
+        updated,
+        total: items.length,
+    };
+    persistData();
+    console.log(`📦 1C sync: +${added} new, ${updated} updated, total ${products.size} products`);
+    res.json({ ok: true, ...sync1cStatus });
+});
+
+// Sync status
+app.get('/api/1c/status', (req, res) => {
+    res.json(sync1cStatus);
+});
+
+// Download agent script
+app.get('/api/1c/agent', (req, res) => {
+    const script = generate1CAgentScript();
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="kosko-agent.bat"');
+    res.send(script);
+});
+
+function generate1CAgentScript() {
+    const cfg = integration1cConfig;
+    return `@echo off
+chcp 65001 >nul
+echo ══════════════════════════════════════
+echo   KOSKO Agent - IgotoShop Sync
+echo ══════════════════════════════════════
+
+powershell -ExecutionPolicy Bypass -Command ^"
+$ErrorActionPreference = 'Stop'
+$server = '${cfg.server}'
+$port = ${cfg.port}
+$base = '${cfg.baseName}'
+$login = '${cfg.login}'
+$password = '${cfg.password}'
+$cloudUrl = 'https://kosko-auth-server.onrender.com/api/1c/sync/products'
+$apiKey = '${cfg.cloudApiKey}'
+
+Write-Host '🔗 Connecting to 1C...' -ForegroundColor Cyan
+try {
+    $connector = New-Object -ComObject 'V83.COMConnector'
+    $connStr = 'Srvr=`"' + $server + '`";Ref=`"' + $base + '`";Usr=`"' + $login + '`";Pwd=`"' + $password + '`"'
+    $conn = $connector.Connect($connStr)
+    Write-Host '✅ Connected to 1C' -ForegroundColor Green
+
+    # Read products from Catalog.Номенклатура
+    $query = $conn.NewObject('Query')
+    $query.Text = 'SELECT T.Ref.Code AS Code, T.Ref.Description AS Name, T.Ref.EdinitcaIzmereniya.Description AS Unit, T.Цена AS Price FROM RegInfo.ЦеныНоменклатуры.SliceLast AS T WHERE T.Ref.DeletionMark = FALSE'
+    
+    # Fallback: simpler query
+    try {
+        $result = $query.Execute().Unload()
+    } catch {
+        Write-Host '⚠️ Trying simpler query...' -ForegroundColor Yellow
+        $query.Text = 'SELECT Code, Description AS Name FROM Catalog.Номенклатура WHERE DeletionMark = FALSE AND IsFolder = FALSE'
+        $result = $query.Execute().Unload()
+    }
+
+    $items = @()
+    for ($i = 0; $i -lt $result.Count(); $i++) {
+        $row = $result.Get($i)
+        $items += @{
+            barcode = $row.Code
+            name = $row.Name
+            price = if ($row.PSObject.Properties['Price']) { $row.Price } else { 0 }
+            unit = if ($row.PSObject.Properties['Unit']) { $row.Unit } else { 'sht' }
+            category = 'Товары'
+        }
+    }
+    Write-Host ('📦 Found ' + $items.Count + ' products') -ForegroundColor Green
+    $conn = $null
+
+    # Send to cloud
+    $body = @{ apiKey = $apiKey; items = $items } | ConvertTo-Json -Depth 5 -Compress
+    $resp = Invoke-RestMethod -Uri $cloudUrl -Method POST -Body $body -ContentType 'application/json; charset=utf-8'
+    Write-Host ('✅ Synced! Added: ' + $resp.added + ', Updated: ' + $resp.updated) -ForegroundColor Green
+} catch {
+    Write-Host ('❌ Error: ' + $_.Exception.Message) -ForegroundColor Red
+}
+Write-Host ''
+Write-Host 'Press any key to close...'
+$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+^"
+`;
+}
+
 // ─── PRODUCTS CRUD (Phase 0.4) ───────────────────────
 const products = new Map(); // id → product
 let productIdCounter = 1;
@@ -1198,6 +1374,7 @@ async function startServer() {
         if (saved.loyaltyConfig) Object.assign(loyaltyConfig, saved.loyaltyConfig);
         if (saved.promotions) { promotions.length = 0; promotions.push(...saved.promotions); }
         if (saved.promoIdCounter) promoIdCounter = saved.promoIdCounter;
+        if (saved.integration1cConfig) Object.assign(integration1cConfig, saved.integration1cConfig);
         console.log(`✅ Restored: ${products.size} products, ${orders.size} orders, ${serverRegistry.size} servers, ${loyaltyCards.size} loyalty cards`);
     }
 
