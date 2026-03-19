@@ -2278,6 +2278,8 @@
             if (id === 'servers') loadServers();
             if (id === 'catalog') loadProducts();
             if (id === 'settings') { loadSettings(); loadPromocodes(); }
+            if (id === 'integration1c') { try { render1cStores(); load1cProducts(); } catch(e) { console.error('1C load error:', e); } }
+            if (id === 'push') { try { loadPushHistory(); } catch(e) { console.error('Push load error:', e); } }
         }
 
         // ─── TOAST ────────────────────────────────────────
@@ -3535,13 +3537,7 @@
             } catch (e) { console.error('Load 1C products error:', e); }
         }
 
-        // Auto-load when section opens
-        const origGoTo = goTo;
-        goTo = function(id, el) {
-            origGoTo(id, el);
-            if (id === 'integration1c') { render1cStores(); load1cProducts(); }
-            if (id === 'push') { loadPushHistory(); }
-        };
+        // Auto-load handled by main goTo function
 
         // ─── SETTINGS ─────────────────────────────────────
         async function loadSettings() {
