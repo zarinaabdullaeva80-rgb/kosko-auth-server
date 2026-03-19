@@ -1949,8 +1949,8 @@
 
                 <div class="card-box">
                     <table>
-                        <thead><tr><th>Штрихкод</th><th>Название</th><th>Цена</th><th>Категория</th><th>Ед.</th><th>Действия</th></tr></thead>
-                        <tbody id="products-tbody"><tr><td colspan="6" class="empty-state">Загрузка...</td></tr></tbody>
+                        <thead><tr><th>Штрихкод</th><th>Название</th><th>Цена</th><th>Категория</th><th>Ед.</th><th>Источник</th><th>Действия</th></tr></thead>
+                        <tbody id="products-tbody"><tr><td colspan="7" class="empty-state">Загрузка...</td></tr></tbody>
                     </table>
                 </div>
             </section>
@@ -3344,24 +3344,25 @@
 
         async function loadProducts() {
             const tb = document.getElementById('products-tbody');
-            tb.innerHTML = '<tr><td colspan="6" class="empty-state">Загрузка...</td></tr>';
+            tb.innerHTML = '<tr><td colspan="7" class="empty-state">Загрузка...</td></tr>';
             try {
                 const res = await fetch('/api/products');
                 const data = await res.json();
                 allProducts = data.products || [];
                 renderProducts(allProducts);
-            } catch(e) { tb.innerHTML = `<tr><td colspan="6" class="empty-state">Ошибка: ${e.message}</td></tr>`; }
+            } catch(e) { tb.innerHTML = `<tr><td colspan="7" class="empty-state">Ошибка: ${e.message}</td></tr>`; }
         }
 
         function renderProducts(list) {
             const tb = document.getElementById('products-tbody');
-            if (!list.length) { tb.innerHTML = '<tr><td colspan="6" class="empty-state">Товаров нет. Добавьте первый или импортируйте из CSV.</td></tr>'; return; }
+            if (!list.length) { tb.innerHTML = '<tr><td colspan="7" class="empty-state">Товаров нет. Добавьте первый или импортируйте из CSV.</td></tr>'; return; }
             tb.innerHTML = list.map(p => `<tr>
                 <td><span class="code-tag">${p.barcode || '—'}</span></td>
                 <td>${p.name}</td>
                 <td style="font-weight:700;color:var(--violet)">${Number(p.price).toLocaleString('ru')} сўм</td>
                 <td>${p.category || '—'}</td>
                 <td>${p.unit || 'шт'}</td>
+                <td><span style="background:${p.source==='1c'?'#1a3a4a':'#2a2a3a'};color:${p.source==='1c'?'#4ecdc4':'#aaa'};padding:2px 8px;border-radius:4px;font-size:11px">${p.source==='1c'?'1С':'Ручной'}</span></td>
                 <td style="display:flex;gap:4px">
                     <button class="btn btn-primary btn-sm" onclick="openProdModal('${p.id}')">✏️</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteProd('${p.id}')">🗑️</button>
