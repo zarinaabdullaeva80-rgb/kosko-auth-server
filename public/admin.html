@@ -2023,6 +2023,41 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="card-box" style="margin-bottom:16px">
+                    <div class="card-box-header"><span class="card-box-title">🧪 Тестовая синхронизация</span></div>
+                    <div style="padding:20px">
+                        <p style="color:#aaa;font-size:14px;margin-bottom:12px">
+                            Проверьте работу пайплайна без подключения к 1С. Нажмите кнопку — на сервер добавятся 2 тестовых товара.
+                        </p>
+                        <button class="btn" onclick="testSync1c()">🧪 Запустить тестовую синхронизацию</button>
+                    </div>
+                </div>
+
+                <div class="card-box" style="margin-bottom:16px">
+                    <div class="card-box-header"><span class="card-box-title">📋 Импортированные товары из 1С</span>
+                        <button class="btn btn-outline" onclick="load1cProducts()" style="margin-left:auto;font-size:12px;padding:6px 12px">🔄 Обновить</button>
+                    </div>
+                    <div style="padding:20px">
+                        <div id="i1c-products-count" style="color:#aaa;font-size:14px;margin-bottom:12px">Загрузка...</div>
+                        <div style="overflow-x:auto">
+                            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                                <thead>
+                                    <tr style="border-bottom:1px solid rgba(255,255,255,.1)">
+                                        <th style="text-align:left;padding:8px;color:#888">Код</th>
+                                        <th style="text-align:left;padding:8px;color:#888">Название</th>
+                                        <th style="text-align:right;padding:8px;color:#888">Цена</th>
+                                        <th style="text-align:left;padding:8px;color:#888">Ед.изм</th>
+                                        <th style="text-align:left;padding:8px;color:#888">Категория</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="i1c-products-table" style="color:#ccc">
+                                    <tr><td colspan="5" style="padding:16px;text-align:center;color:#666">Нет данных</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- ═══ SETTINGS ═══ -->
@@ -3551,11 +3586,41 @@
             toast('📥 Скачивание агента...');
         }
 
+        async function testSync1c() {
+            try {
+                const res = await fetch('/api/1c/test-sync', { method: 'POST' });
+                const data = await res.json();
+                if (data.ok) { toast('✅ ' + data.message); load1cStatus(); load1cProducts(); }
+            } catch (e) { toast('❌ Ошибка: ' + e.message); }
+        }
+
+        async function load1cProducts() {
+            try {
+                const res = await fetch('/api/1c/products');
+                const data = await res.json();
+                document.getElementById('i1c-products-count').textContent = '📦 Всего товаров из 1С: ' + data.total;
+                const tbody = document.getElementById('i1c-products-table');
+                if (!data.products || data.products.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="padding:16px;text-align:center;color:#666">Нет импортированных товаров</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.products.map(p => 
+                    '<tr style="border-bottom:1px solid rgba(255,255,255,.05)">' +
+                    '<td style="padding:8px">' + (p.barcode || '—') + '</td>' +
+                    '<td style="padding:8px">' + (p.name || '—') + '</td>' +
+                    '<td style="padding:8px;text-align:right;color:#4ecdc4;font-weight:bold">' + (p.price ? p.price.toLocaleString() + ' сум' : '—') + '</td>' +
+                    '<td style="padding:8px">' + (p.unit || '—') + '</td>' +
+                    '<td style="padding:8px">' + (p.category || '—') + '</td>' +
+                    '</tr>'
+                ).join('');
+            } catch (e) { console.error('Load 1C products error:', e); }
+        }
+
         // Auto-load 1C config when section opens
         const origGoTo = goTo;
         goTo = function(id, el) {
             origGoTo(id, el);
-            if (id === 'integration1c') load1cConfig();
+            if (id === 'integration1c') { load1cConfig(); load1cProducts(); }
         };
 
         // ─── SETTINGS ─────────────────────────────────────

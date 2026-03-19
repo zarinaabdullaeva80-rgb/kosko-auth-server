@@ -779,6 +779,37 @@ app.get('/api/1c/status', (req, res) => {
     res.json(sync1cStatus);
 });
 
+// List products imported from 1C
+app.get('/api/1c/products', (req, res) => {
+    const all = Array.from(products.values());
+    const from1c = all.filter(p => p.source === '1c');
+    res.json({ total: from1c.length, products: from1c.slice(0, 100) });
+});
+
+// Manual test sync (for testing without agent)
+app.post('/api/1c/test-sync', (req, res) => {
+    const testItems = [
+        { barcode: 'TEST-001', name: 'Тестовый товар 1', price: 15000, unit: 'шт', category: 'Тест' },
+        { barcode: 'TEST-002', name: 'Тестовый товар 2', price: 25000, unit: 'шт', category: 'Тест' },
+    ];
+    // Reuse sync logic - bypass API key for admin test
+    let added = 0, updated = 0;
+    for (const item of testItems) {
+        const existing = Array.from(products.values()).find(p => p.barcode === item.barcode);
+        if (existing) {
+            Object.assign(existing, { name: item.name, price: item.price, unit: item.unit, category: item.category, updatedAt: Date.now() });
+            updated++;
+        } else {
+            const id = String(productIdCounter++);
+            products.set(id, { id, ...item, imageUrl: '', description: '', createdAt: Date.now(), updatedAt: Date.now(), source: '1c' });
+            added++;
+        }
+    }
+    sync1cStatus = { lastSync: Date.now(), lastError: null, productsCount: products.size, status: 'success', added, updated, total: testItems.length };
+    persistData();
+    res.json({ ok: true, message: `Тест: +${added} новых, ${updated} обновлённых`, ...sync1cStatus });
+});
+
 // Download agent script
 app.get('/api/1c/agent', (req, res) => {
     const script = generate1CAgentScript();
