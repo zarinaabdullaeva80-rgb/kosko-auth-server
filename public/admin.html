@@ -2193,6 +2193,8 @@
                 <div class="form-group"><label>Скидка % (или 0)</label><input type="number" id="new-promo-pct" placeholder="10"></div>
                 <div class="form-group"><label>Скидка сумма (или 0)</label><input type="number" id="new-promo-amt" placeholder="5000"></div>
                 <div class="form-group"><label>Мин. сумма заказа</label><input type="number" id="new-promo-min" placeholder="50000"></div>
+                <div class="form-group"><label>Макс. кол-во использований</label><input type="number" id="new-promo-limit" placeholder="100"></div>
+                <div class="form-group"><label>Срок действия до</label><input type="date" id="new-promo-expires"></div>
             </div>
             <div class="form-actions" style="margin-top:16px">
                 <button class="btn btn-ghost" onclick="closePromoModal()">Отмена</button>
@@ -2353,29 +2355,18 @@
         function deletePromo(id) { if (!confirm('Удалить акцию?')) return; const p = state.promotions.find(x => x.id === id); state.promotions = state.promotions.filter(x => x.id !== id); addLog('warn', `Акция "${p?.name}" удалена`); save(); renderPromos(); renderDashboard(); toast('🗑 Акция удалена'); }
 
         // ─── PUSH ────────────────────────────────────────
-        function sendPush() {
+        async function sendPush() {
             const title = document.getElementById('push-title').value.trim();
             const body = document.getElementById('push-body').value.trim();
             if (!title || !body) { toast('⚠️ Заполните заголовок и текст'); return; }
-            const aud = document.getElementById('push-audience').value;
-            const audTxt = aud === 'all' ? 'Всем' : aud.charAt(0).toUpperCase() + aud.slice(1) + ' уровень';
-            const schedDate = document.getElementById('push-date').value;
-            const schedTime = document.getElementById('push-time').value;
-            const isScheduled = schedDate && schedTime;
-            const schedLabel = isScheduled ? `${schedDate} ${schedTime}` : null;
-            // Simulate audience size
-            let audSize = state.users.length;
-            if (aud !== 'all') audSize = state.users.filter(u => u.level === aud).length;
-            // Simulate broadcast stats
-            const delivered = Math.max(1, Math.floor(audSize * (0.85 + Math.random() * 0.15)));
-            const opened = Math.max(1, Math.floor(delivered * (0.4 + Math.random() * 0.35)));
-            const clicked = Math.max(0, Math.floor(opened * (0.2 + Math.random() * 0.3)));
-            const entry = { title, body, audience: audTxt, time: now(), scheduled: schedLabel, stats: { sent: audSize, delivered, opened, clicked } };
-            state.pushLog.unshift(entry);
-            const schedMsg = isScheduled ? ` (запланировано на ${schedLabel})` : '';
-            addLog('push', `Push отправлен: "${title}" → ${audTxt}${schedMsg}`);
-            save(); renderPushLog(); renderBcastStats(); clearPush();
-            toast(isScheduled ? `⏰ Запланировано на ${schedLabel}` : '🔔 Уведомление отправлено!');
+            const audience = document.getElementById('push-audience').value;
+            try {
+                const res = await fetch('/api/push/send', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ title, body, audience }) });
+                const data = await res.json();
+                if (data.ok) { toast(`🔔 Отправлено: ${data.sent} устройств`); } else { toast('⚠️ Ошибка: ' + (data.error || 'unknown')); }
+            } catch (e) { toast('❌ ' + e.message); }
+            clearPush();
+            loadPushHistory();
         }
         function clearPush() {
             document.getElementById('push-title').value = '';
@@ -2384,13 +2375,21 @@
             document.getElementById('push-date').value = '';
             document.getElementById('push-time').value = '';
         }
-        function renderPushLog() {
+        async function loadPushHistory() {
             const el = document.getElementById('push-log'); if (!el) return;
-            el.innerHTML = state.pushLog.map(p => {
-                const schedBadge = p.scheduled ? `<span class="schedule-badge">⏰ ${p.scheduled}</span>` : `<span class="schedule-badge now">⚡ Сейчас</span>`;
-                const statsLine = p.stats ? ` <span style="color:var(--muted);font-size:10px">📨${p.stats.sent} ✅${p.stats.delivered} 👀${p.stats.opened} 👆${p.stats.clicked}</span>` : '';
-                return `<div class="log-item"><div class="log-dot push"></div><div class="log-text"><b>${p.title}</b> — ${p.body} <span style="color:var(--violet);font-size:11px">[${p.audience}]</span> ${schedBadge}${statsLine}</div><div class="log-time">${p.time}</div></div>`;
-            }).join('') || '<div class="empty-state">История пуста</div>';
+            try {
+                const res = await fetch('/api/push/history');
+                const data = await res.json();
+                if (!data.history || data.history.length === 0) { el.innerHTML = '<div class="empty-state">История пуста</div>'; return; }
+                el.innerHTML = data.history.map(p => {
+                    const dt = new Date(p.createdAt).toLocaleString('ru-RU');
+                    const errBadge = p.error ? ` <span style="color:#ff6b6b">❌ ${p.error}</span>` : '';
+                    return `<div class="log-item"><div class="log-dot push"></div><div class="log-text"><b>${p.title}</b> — ${p.body} <span style="color:var(--violet);font-size:11px">[${p.audience}]</span> 📨${p.sent}${errBadge}</div><div class="log-time">${dt}</div></div>`;
+                }).join('');
+                // Update stats
+                const totals = data.history.reduce((a, p) => { a.sent += p.sent || 0; return a; }, { sent: 0 });
+                const bsSent = document.getElementById('bs-sent'); if (bsSent) bsSent.textContent = totals.sent;
+            } catch (e) { el.innerHTML = '<div class="empty-state">Ошибка загрузки</div>'; }
         }
         function renderBcastStats() {
             const totals = state.pushLog.reduce((a, p) => {
@@ -3541,6 +3540,7 @@
         goTo = function(id, el) {
             origGoTo(id, el);
             if (id === 'integration1c') { render1cStores(); load1cProducts(); }
+            if (id === 'push') { loadPushHistory(); }
         };
 
         // ─── SETTINGS ─────────────────────────────────────
@@ -3625,8 +3625,10 @@
             const discountPercent = Number(document.getElementById('new-promo-pct').value) || 0;
             const discountAmount = Number(document.getElementById('new-promo-amt').value) || 0;
             const minOrder = Number(document.getElementById('new-promo-min').value) || 0;
+            const usageLimit = Number(document.getElementById('new-promo-limit').value) || 100;
+            const expiresAt = document.getElementById('new-promo-expires').value ? new Date(document.getElementById('new-promo-expires').value).getTime() : null;
             if (!code) return showToast('⚠️ Введите код');
-            await fetch('/api/promocodes', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code, discountPercent, discountAmount, minOrder}) });
+            await fetch('/api/promocodes', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({code, discountPercent, discountAmount, minOrder, usageLimit, expiresAt}) });
             showToast(`✅ Промокод ${code} создан`);
             closePromoModal();
             loadPromocodes();

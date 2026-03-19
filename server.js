@@ -59,6 +59,7 @@ function persistData() {
         dbSet('promotions', promotions),
         dbSet('promoIdCounter', promoIdCounter),
         dbSet('integration1cStores', integration1cStores),
+        dbSet('pushHistory', pushHistory),
     ]).then(() => console.log('💾 Data persisted to PostgreSQL'))
       .catch(e => console.error('❌ Persist error:', e.message));
 }
@@ -68,7 +69,7 @@ async function loadPersistedData() {
     try {
         const keys = ['storeSettings','products','productIdCounter','banners','bannerIdCounter',
                        'promocodes','orders','orderIdCounter','serverRegistry',
-                       'loyaltyCards','loyaltyConfig','promotions','promoIdCounter','integration1cStores'];
+                       'loyaltyCards','loyaltyConfig','promotions','promoIdCounter','integration1cStores','pushHistory'];
         const result = {};
         for (const key of keys) {
             result[key] = await dbGet(key);
@@ -618,6 +619,7 @@ app.get('/api/payment/:provider/status/:id', (req, res) => {
 
 // ─── PUSH NOTIFICATIONS ─────────────────────────────
 const pushTokens = [];
+const pushHistory = [];
 
 app.post('/api/push/register', (req, res) => {
     const { token, platform } = req.body;
@@ -630,19 +632,26 @@ app.post('/api/push/register', (req, res) => {
 });
 
 app.post('/api/push/send', async (req, res) => {
-    const { title, body } = req.body;
-    // Send via Expo Push API
+    const { title, body, audience } = req.body;
     const messages = pushTokens.map(t => ({ to: t.token, title, body, sound: 'default' }));
+    let sent = messages.length, error = null;
     try {
-        await fetch('https://exp.host/--/api/v2/push/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(messages),
-        });
-        res.json({ ok: true, sent: messages.length });
-    } catch (err) {
-        res.json({ ok: false, error: err.message });
-    }
+        if (messages.length > 0) {
+            await fetch('https://exp.host/--/api/v2/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(messages),
+            });
+        }
+    } catch (err) { error = err.message; }
+    pushHistory.unshift({ id: Date.now(), title, body, audience: audience || 'all', sent, error, createdAt: Date.now() });
+    if (pushHistory.length > 100) pushHistory.length = 100;
+    persistData();
+    res.json({ ok: !error, sent, error });
+});
+
+app.get('/api/push/history', (req, res) => {
+    res.json({ history: pushHistory, total: pushHistory.length });
 });
 
 // ─── STORE SETTINGS (Phase 0.1) ─────────────────────
@@ -974,8 +983,8 @@ app.get('/api/promotions', (req, res) => {
     res.json({ promotions: promotions.filter(p => p.active), updatedAt: Date.now() });
 });
 app.post('/api/promotions', (req, res) => {
-    const { title, description, imageUrl, discountPercent, expiresAt } = req.body;
-    const promo = { id: 'prom_' + (promoIdCounter++), title, description: description || '', imageUrl: imageUrl || '', discountPercent: discountPercent || 0, expiresAt: expiresAt || null, active: true, createdAt: Date.now() };
+    const { title, description, imageUrl, oldPrice, newPrice, discountPercent, expiresAt } = req.body;
+    const promo = { id: 'prom_' + (promoIdCounter++), title, description: description || '', imageUrl: imageUrl || '', oldPrice: oldPrice || 0, newPrice: newPrice || 0, discountPercent: discountPercent || 0, expiresAt: expiresAt || null, active: true, createdAt: Date.now() };
     promotions.push(promo);
     persistData();
     res.json({ ok: true, promotion: promo });
@@ -1369,6 +1378,7 @@ async function startServer() {
         if (saved.promotions) { promotions.length = 0; promotions.push(...saved.promotions); }
         if (saved.promoIdCounter) promoIdCounter = saved.promoIdCounter;
         if (saved.integration1cStores) { saved.integration1cStores.forEach(ss => { const st = integration1cStores.find(s => s.id === ss.id); if (st) Object.assign(st, ss); else integration1cStores.push(ss); }); }
+        if (saved.pushHistory) { pushHistory.length = 0; pushHistory.push(...saved.pushHistory); }
         console.log(`✅ Restored: ${products.size} products, ${orders.size} orders, ${serverRegistry.size} servers, ${loyaltyCards.size} loyalty cards`);
     }
 
