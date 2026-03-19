@@ -1975,10 +1975,11 @@
                                         <th style="text-align:left;padding:8px;color:#888">Название</th>
                                         <th style="text-align:right;padding:8px;color:#888">Цена</th>
                                         <th style="text-align:left;padding:8px;color:#888">Ед.изм</th>
+                                        <th style="text-align:left;padding:8px;color:#888">Источник</th>
                                     </tr>
                                 </thead>
                                 <tbody id="i1c-products-table" style="color:#ccc">
-                                    <tr><td colspan="5" style="padding:16px;text-align:center;color:#666">Нет данных</td></tr>
+                                    <tr><td colspan="6" style="padding:16px;text-align:center;color:#666">Нет данных</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -3516,7 +3517,7 @@
                 document.getElementById('i1c-products-count').textContent = '📦 Всего товаров из 1С: ' + data.total;
                 const tbody = document.getElementById('i1c-products-table');
                 if (!data.products || data.products.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="padding:16px;text-align:center;color:#666">Нет импортированных товаров</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;text-align:center;color:#666">Нет импортированных товаров</td></tr>';
                     return;
                 }
                 const storeNames = {};
@@ -3528,6 +3529,7 @@
                     '<td style="padding:8px">' + (p.name || '—') + '</td>' +
                     '<td style="padding:8px;text-align:right;color:#4ecdc4;font-weight:bold">' + (p.price ? p.price.toLocaleString() + ' сум' : '—') + '</td>' +
                     '<td style="padding:8px">' + (p.unit || '—') + '</td>' +
+                    '<td style="padding:8px"><span style="background:' + (p.source === '1c' ? '#1a3a4a' : '#3a3a1a') + ';color:' + (p.source === '1c' ? '#4ecdc4' : '#cdc44e') + ';padding:2px 8px;border-radius:4px;font-size:11px">' + (p.source === '1c' ? '1С' : 'Ручной') + '</span></td>' +
                     '</tr>'
                 ).join('');
             } catch (e) { console.error('Load 1C products error:', e); }
