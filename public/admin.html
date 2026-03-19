@@ -3497,7 +3497,7 @@
         // ─── 1C INTEGRATION ───────────────────────────────
         async function load1cConfig() {
             try {
-                const res = await fetch(API + '/api/1c/config');
+                const res = await fetch('/api/1c/config');
                 const cfg = await res.json();
                 document.getElementById('i1c-server').value = cfg.server || '';
                 document.getElementById('i1c-port').value = cfg.port || 1541;
@@ -3522,15 +3522,15 @@
                 enabled: document.getElementById('i1c-enabled').checked,
             };
             try {
-                const res = await fetch(API + '/api/1c/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+                const res = await fetch('/api/1c/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
                 const data = await res.json();
-                if (data.ok) { showToast('✅ Настройки 1С сохранены'); load1cConfig(); }
-            } catch (e) { showToast('❌ Ошибка: ' + e.message); }
+                if (data.ok) { toast('✅ Настройки 1С сохранены'); load1cConfig(); }
+            } catch (e) { toast('❌ Ошибка: ' + e.message); }
         }
 
         async function load1cStatus() {
             try {
-                const res = await fetch(API + '/api/1c/status');
+                const res = await fetch('/api/1c/status');
                 const s = await res.json();
                 const el = document.getElementById('i1c-status');
                 if (s.status === 'idle') {
@@ -3547,8 +3547,8 @@
         }
 
         function download1cAgent() {
-            window.open(API + '/api/1c/agent', '_blank');
-            showToast('📥 Скачивание агента...');
+            window.open('/api/1c/agent', '_blank');
+            toast('📥 Скачивание агента...');
         }
 
         // Auto-load 1C config when section opens
