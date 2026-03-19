@@ -789,68 +789,60 @@ app.get('/api/1c/agent', (req, res) => {
 
 function generate1CAgentScript() {
     const cfg = integration1cConfig;
-    return `@echo off
-chcp 65001 >nul
-echo ══════════════════════════════════════
-echo   KOSKO Agent - IgotoShop Sync
-echo ══════════════════════════════════════
-
-powershell -ExecutionPolicy Bypass -Command ^"
-$ErrorActionPreference = 'Stop'
-$server = '${cfg.server}'
-$port = ${cfg.port}
-$base = '${cfg.baseName}'
-$login = '${cfg.login}'
-$password = '${cfg.password}'
-$cloudUrl = 'https://kosko-auth-server.onrender.com/api/1c/sync/products'
-$apiKey = '${cfg.cloudApiKey}'
-
-Write-Host '🔗 Connecting to 1C...' -ForegroundColor Cyan
-try {
-    $connector = New-Object -ComObject 'V83.COMConnector'
-    $connStr = 'Srvr=`"' + $server + '`";Ref=`"' + $base + '`";Usr=`"' + $login + '`";Pwd=`"' + $password + '`"'
-    $conn = $connector.Connect($connStr)
-    Write-Host '✅ Connected to 1C' -ForegroundColor Green
-
-    # Read products from Catalog.Номенклатура
-    $query = $conn.NewObject('Query')
-    $query.Text = 'SELECT T.Ref.Code AS Code, T.Ref.Description AS Name, T.Ref.EdinitcaIzmereniya.Description AS Unit, T.Цена AS Price FROM RegInfo.ЦеныНоменклатуры.SliceLast AS T WHERE T.Ref.DeletionMark = FALSE'
-    
-    # Fallback: simpler query
-    try {
-        $result = $query.Execute().Unload()
-    } catch {
-        Write-Host '⚠️ Trying simpler query...' -ForegroundColor Yellow
-        $query.Text = 'SELECT Code, Description AS Name FROM Catalog.Номенклатура WHERE DeletionMark = FALSE AND IsFolder = FALSE'
-        $result = $query.Execute().Unload()
-    }
-
-    $items = @()
-    for ($i = 0; $i -lt $result.Count(); $i++) {
-        $row = $result.Get($i)
-        $items += @{
-            barcode = $row.Code
-            name = $row.Name
-            price = if ($row.PSObject.Properties['Price']) { $row.Price } else { 0 }
-            unit = if ($row.PSObject.Properties['Unit']) { $row.Unit } else { 'sht' }
-            category = 'Товары'
-        }
-    }
-    Write-Host ('📦 Found ' + $items.Count + ' products') -ForegroundColor Green
-    $conn = $null
-
-    # Send to cloud
-    $body = @{ apiKey = $apiKey; items = $items } | ConvertTo-Json -Depth 5 -Compress
-    $resp = Invoke-RestMethod -Uri $cloudUrl -Method POST -Body $body -ContentType 'application/json; charset=utf-8'
-    Write-Host ('✅ Synced! Added: ' + $resp.added + ', Updated: ' + $resp.updated) -ForegroundColor Green
-} catch {
-    Write-Host ('❌ Error: ' + $_.Exception.Message) -ForegroundColor Red
-}
-Write-Host ''
-Write-Host 'Press any key to close...'
-$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-^"
-`;
+    const lines = [
+        '@echo off',
+        'chcp 65001 >nul',
+        'echo ======================================',
+        'echo   KOSKO Agent - IgotoShop Sync',
+        'echo ======================================',
+        '',
+        'powershell -ExecutionPolicy Bypass -Command "',
+        "$ErrorActionPreference = 'Stop'",
+        "$server = '" + cfg.server + "'",
+        '$port = ' + cfg.port,
+        "$base = '" + cfg.baseName + "'",
+        "$login = '" + cfg.login + "'",
+        "$password = '" + cfg.password + "'",
+        "$cloudUrl = 'https://kosko-auth-server.onrender.com/api/1c/sync/products'",
+        "$apiKey = '" + cfg.cloudApiKey + "'",
+        '',
+        "Write-Host 'Connecting to 1C...' -ForegroundColor Cyan",
+        'try {',
+        "    $connector = New-Object -ComObject V83.COMConnector",
+        "    $connStr = 'Srvr=' + $server + ';Ref=' + $base + ';Usr=' + $login + ';Pwd=' + $password",
+        '    $conn = $connector.Connect($connStr)',
+        "    Write-Host 'Connected to 1C' -ForegroundColor Green",
+        '',
+        "    $query = $conn.NewObject('Query')",
+        "    $query.Text = 'SELECT Code, Description AS Name FROM Catalog.Nomenclature WHERE DeletionMark = FALSE AND IsFolder = FALSE'",
+        '',
+        '    try {',
+        '        $result = $query.Execute().Unload()',
+        '    } catch {',
+        "        Write-Host 'Trying alt query...' -ForegroundColor Yellow",
+        "        $query.Text = 'ВЫБРАТЬ Код, Наименование КАК Name ИЗ Справочник.Номенклатура ГДЕ ПометкаУдаления = ЛОЖЬ И ЭтоГруппа = ЛОЖЬ'",
+        '        $result = $query.Execute().Unload()',
+        '    }',
+        '',
+        '    $items = @()',
+        '    for ($i = 0; $i -lt $result.Count(); $i++) {',
+        '        $row = $result.Get($i)',
+        '        $items += @{ barcode = $row.Code; name = $row.Name; price = 0; unit = \"sht\"; category = \"Products\" }',
+        '    }',
+        "    Write-Host ('Found ' + $items.Count + ' products') -ForegroundColor Green",
+        '    $conn = $null',
+        '',
+        '    $body = @{ apiKey = $apiKey; items = $items } | ConvertTo-Json -Depth 5 -Compress',
+        "    $resp = Invoke-RestMethod -Uri $cloudUrl -Method POST -Body $body -ContentType 'application/json; charset=utf-8'",
+        "    Write-Host ('Synced! Added: ' + $resp.added + ', Updated: ' + $resp.updated) -ForegroundColor Green",
+        '} catch {',
+        "    Write-Host ('Error: ' + $_.Exception.Message) -ForegroundColor Red",
+        '}',
+        "Write-Host 'Press any key to close...'",
+        "$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')",
+        '"',
+    ];
+    return lines.join('\r\n');
 }
 
 // ─── PRODUCTS CRUD (Phase 0.4) ───────────────────────
